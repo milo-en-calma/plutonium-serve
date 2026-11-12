@@ -216,8 +216,9 @@ func (c *client) emitMessage(name, message, from string) {
 
 // --- payload views and entity refs ---------------------------------------------
 //
-// Entities carry a deterministic natural-key ref, the same strings function
-// calls accept back: the adapter resolves a ref against live state, so there is
+// Entities carry a deterministic natural-key ref (SERVE.md, entity
+// references), the same strings function calls
+// accept back: the adapter resolves a ref against live state, so there is
 // no handle registry to leak or go stale.
 
 type npcView struct {
