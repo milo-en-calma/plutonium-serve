@@ -504,5 +504,21 @@ func init() {
 				return nil, nil
 			},
 		},
+
+		// Sleeping (#6). The server asks the client for the sleep word
+		// once the sleep screen shows; with no script running, plutonium
+		// answers it by itself when the fatigue bar reaches zero.
+		&fnSpec{
+			name: "is_sleeping",
+			kind: fnQuery,
+			call: func(c *client, _ fnArgs) (any, error) { return c.sleeping, nil },
+		},
+		// false means no sleeping bag was carried and nothing was sent, as
+		// walk_path_to's false means no path (plutonium returns nothing).
+		&fnSpec{
+			name: "use_sleeping_bag",
+			kind: fnAction,
+			call: func(c *client, _ fnArgs) (any, error) { return c.useSleepingBag(), nil },
+		},
 	)
 }
