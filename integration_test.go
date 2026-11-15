@@ -88,6 +88,42 @@ func (l *live) waitState(key string, state accountState, within time.Duration) m
 	return nil
 }
 
+// pos reads the player's tile through get_x and get_z.
+func (l *live) pos(key string) (int, int) {
+	l.t.Helper()
+	_, x := l.call("GET", "/v1/accounts/"+key+"/fn/get_x", "")
+	_, z := l.call("GET", "/v1/accounts/"+key+"/fn/get_z", "")
+	xv, xok := x["result"].(float64)
+	zv, zok := z["result"].(float64)
+	if !xok || !zok {
+		l.t.Fatalf("position: get_x %v, get_z %v", x, z)
+	}
+	return int(xv), int(zv)
+}
+
+// settle waits until the player has stood on one tile for two seconds,
+// about three server ticks, and returns that tile.
+func (l *live) settle(key string, within time.Duration) (int, int) {
+	l.t.Helper()
+	x, z := l.pos(key)
+	since := time.Now()
+	for deadline := time.Now().Add(within); time.Now().Before(deadline); time.Sleep(100 * time.Millisecond) {
+		nx, nz := l.pos(key)
+		if nx != x || nz != z {
+			x, z, since = nx, nz, time.Now()
+		} else if time.Since(since) >= 2*time.Second {
+			return x, z
+		}
+	}
+	l.t.Fatalf("player still moving after %s; last at %d,%d", within, x, z)
+	return 0, 0
+}
+
+// tiles is the distance between two tiles in steps, diagonals counting as one.
+func tiles(x1, z1, x2, z2 int) int {
+	return max(abs(x1-x2), abs(z1-z2))
+}
+
 func TestLiveServeMode(t *testing.T) {
 	game := envOr("PLUTONIUM_IT_GAME", "127.0.0.1:43594")
 	user := envOr("PLUTONIUM_IT_USER", "Serve Tst1")
@@ -199,6 +235,44 @@ func TestLiveServeMode(t *testing.T) {
 	walk := fmt.Sprintf(`{"x":%d,"z":%d}`, int(x["result"].(float64))+1, int(z["result"].(float64)))
 	if status, body := l.call("POST", "/v1/accounts/"+key+"/fn/walk_path_to", walk); status != 200 || body["result"] != true {
 		t.Fatalf("walk_path_to %s: %d %v", walk, status, body)
+	}
+
+	// walk_to stops a walk: start one ten tiles off, and once the player has
+	// taken a step, walk_to the tile they stand on. Left alone they would walk
+	// on to the target; stopped, they settle at most one tile from where they
+	// stood, since the server may already have moved them a step further.
+	sx, sz := l.settle(key, 15*time.Second)
+	tx, tz, found := 0, 0, false
+	for _, d := range [][2]int{{10, 0}, {-10, 0}, {0, 10}, {0, -10}} {
+		target := fmt.Sprintf(`{"x":%d,"z":%d}`, sx+d[0], sz+d[1])
+		status, body := l.call("POST", "/v1/accounts/"+key+"/fn/walk_to", target)
+		if status != 200 {
+			t.Fatalf("walk_to %s: %d %v", target, status, body)
+		}
+		if body["result"] == true {
+			tx, tz, found = sx+d[0], sz+d[1], true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("walk_to found no path ten tiles off in any direction from %d,%d", sx, sz)
+	}
+	mx, mz := sx, sz
+	for deadline := time.Now().Add(10 * time.Second); mx == sx && mz == sz; time.Sleep(100 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatalf("player never left %d,%d after walk_to %d,%d", sx, sz, tx, tz)
+		}
+		mx, mz = l.pos(key)
+	}
+	if left := tiles(mx, mz, tx, tz); left < 4 {
+		t.Fatalf("player at %d,%d is already %d tiles from the target, too close to tell a stop from arriving", mx, mz, left)
+	}
+	stop := fmt.Sprintf(`{"x":%d,"z":%d}`, mx, mz)
+	if status, body := l.call("POST", "/v1/accounts/"+key+"/fn/walk_to", stop); status != 200 || body["result"] != true {
+		t.Fatalf("walk_to own tile %s: %d %v", stop, status, body)
+	}
+	if fx, fz := l.settle(key, 15*time.Second); tiles(fx, fz, mx, mz) > 1 {
+		t.Fatalf("after walk_to its own tile %d,%d the player settled at %d,%d (target was %d,%d), want it stopped", mx, mz, fx, fz, tx, tz)
 	}
 
 	// Logout ends in stopped, even when the server refuses the logout packet

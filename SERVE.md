@@ -204,6 +204,14 @@ deterministically and in about a second. The live suite reuses one test account 
 the server rate-limits registration; it also checks real spawn events and the
 `kill_signal` handshake.
 
+The **live suite** (`integration_test.go`) makes a successful call to these functions
+against the real server, and only these: `get_x`, `get_z`, `send_chat_message`,
+`get_objects`, `get_inventory_items`, `get_empty_slots`, `walk_path_to` (a one-tile
+walk) and `walk_to` (a ten-tile walk, then `walk_to` the tile the player stands on, which
+must leave them settled within a tile of it). Every other served function is covered only
+by the always-on tests: its golden file below, and the fake game server tests where they
+call it.
+
 **Golden files** pin the exact JSON, compared byte for byte: one indented file per
 scenario under `testdata/`, named after the verbatim event or function name. They are
 plain example payloads, so clients can adopt them in their own tests
@@ -215,7 +223,10 @@ as a shared contract.
   the real HTTP handlers. The path queries run on a map with no landscape loaded, which
   is open ground. `walk_path_to`, `walk_to`, `at_object`, `at_object2`, `at_wall_object` and
   `talk_to_npc` need the pathfinder, which needs the landscape archive the tests don't load, so their files pin
-  an error answer instead, and the live suite covers their success.
+  an error answer instead. The live suite covers the success of `walk_path_to` and
+  `walk_to`; `at_object`, `at_object2`, `at_wall_object` and `talk_to_npc` have no test
+  of a successful call yet, since each needs a known object, wall object or NPC next to
+  the test account.
 - *Errors:* `testdata/errors/` pins the `account_offline` envelope.
 
 A test fails if an event or function ships without its file. Because `-update` accepts
