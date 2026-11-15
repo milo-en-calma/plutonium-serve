@@ -49,11 +49,16 @@ The surface grows one slice at a time, as clients need it (#5). Served so far:
 | area transitions | `get_wall_objects`, `at_wall_object`, `at_object2` |
 | path queries | `calculate_path_to`, `calculate_path` |
 | replying to chat | `walk_to` |
+| leaving Tutorial Island | `skip_tutorial` |
 
 - `walk_path_to` answers `false` for "no path". On that precedent, `use_sleeping_bag`
   answers `true` when a bag was carried and used, and `false` when none was, in which
   case nothing is sent (plutonium itself returns nothing and prints a message only this
   process's console would show).
+- `skip_tutorial` answers `null` and always sends its packet, as plutonium does. The
+  server acts on it only while the player is on Tutorial Island and its skip option is on,
+  moving them to its respawn point (Lumbridge by default); elsewhere it is ignored, so
+  `get_x`/`get_z` afterwards say whether it worked.
 - `answer` checks the index against the menu's real option count.
 - `walk_to` sends one walk packet planned within the loaded region, with none of
   `walk_path_to`'s long-distance search. Its use here is stopping: sent to the tile the

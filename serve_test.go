@@ -420,6 +420,16 @@ func TestBankingActionsSendPackets(t *testing.T) {
 	}
 }
 
+func TestSkipTutorialSendsItsPacket(t *testing.T) {
+	e := newTestEnv(t, "")
+	fa := e.fakeOnline("tester", fakeOpts{})
+
+	e.do("POST", "/v1/accounts/tester/fn/skip_tutorial", `{}`).want(t, 200, "")
+	if op := fa.nextPacket(t); op != 84 {
+		t.Fatalf("skip_tutorial sent opcode %d, want 84", op)
+	}
+}
+
 func TestBankingArgumentsAndGoneNPC(t *testing.T) {
 	e := newTestEnv(t, "")
 	fa := e.fakeOnline("tester", fakeOpts{setup: withBanker})

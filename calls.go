@@ -737,5 +737,19 @@ func init() {
 			kind: fnAction,
 			call: func(c *client, _ fnArgs) (any, error) { return c.useSleepingBag(), nil },
 		},
+
+		// Leaving Tutorial Island, as plutonium's skip_tutorial: one packet,
+		// sent wherever the player is. The server acts on it only on the
+		// island, and only with its skip option on, moving the player to
+		// its respawn point; elsewhere it is ignored. The position calls
+		// show whether it worked.
+		&fnSpec{
+			name: "skip_tutorial",
+			kind: fnAction,
+			call: func(c *client, _ fnArgs) (any, error) {
+				c.skipTutorial()
+				return nil, nil
+			},
+		},
 	)
 }

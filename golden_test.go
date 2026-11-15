@@ -203,6 +203,7 @@ var callScenarios = map[string]callScenario{
 	"deposit":             {"POST", `{"id":14,"amount":1}`},
 	"close_bank":          {"POST", `{}`},
 	"use_sleeping_bag":    {"POST", `{}`},
+	"skip_tutorial":       {"POST", `{}`},
 }
 
 // Functions whose success needs the pathfinder, which needs the landscape
