@@ -196,26 +196,29 @@ var callScenarios = map[string]callScenario{
 	"is_sleeping":         {"GET", ""},
 	// goldenScene's map has no landscape loaded, so it is open ground and
 	// these find straight paths.
-	"calculate_path_to":   {"GET", "x=223&z=634"},
-	"calculate_path":      {"GET", "start_x=220&start_z=634&x=220&z=637"},
-	"send_chat_message":   {"POST", `{"message":"hello"}`},
-	"answer":              {"POST", `{"index":0}`},
-	"deposit":             {"POST", `{"id":14,"amount":1}`},
-	"close_bank":          {"POST", `{}`},
-	"use_sleeping_bag":    {"POST", `{}`},
-	"skip_tutorial":       {"POST", `{}`},
+	"calculate_path_to": {"GET", "x=223&z=634"},
+	"calculate_path":    {"GET", "start_x=220&start_z=634&x=220&z=637"},
+	"send_chat_message": {"POST", `{"message":"hello"}`},
+	"answer":            {"POST", `{"index":0}`},
+	"deposit":           {"POST", `{"id":14,"amount":1}`},
+	"close_bank":        {"POST", `{}`},
+	"equip_item":        {"POST", `{"item":"inv/1:id=14"}`},
+	"use_sleeping_bag":  {"POST", `{}`},
+	"skip_tutorial":     {"POST", `{}`},
 }
 
 // Functions whose success needs the pathfinder, which needs the landscape
 // archive these tests don't load; their gone answers are pinned instead, and
 // the live suite covers their success.
 var pathfindingFunctions = map[string]callScenario{
-	"walk_path_to":   {"POST", `{"x":-1,"z":0}`}, // a bad_argument: the call shape, without walking
-	"walk_to":        {"POST", `{"x":-1,"z":0}`}, // likewise: it plans within the loaded region, which the scene doesn't set
-	"at_object":      {"POST", `{"object":"object/1@170,640"}`},
-	"at_object2":     {"POST", `{"object":"object/1@170,640"}`},
-	"at_wall_object": {"POST", `{"wall_object":"wall/2@170,641:0"}`},
-	"talk_to_npc":    {"POST", `{"npc":"npc/13:id=95"}`},
+	"walk_path_to":       {"POST", `{"x":-1,"z":0}`}, // a bad_argument: the call shape, without walking
+	"walk_to":            {"POST", `{"x":-1,"z":0}`}, // likewise: it plans within the loaded region, which the scene doesn't set
+	"at_object":          {"POST", `{"object":"object/1@170,640"}`},
+	"at_object2":         {"POST", `{"object":"object/1@170,640"}`},
+	"at_wall_object":     {"POST", `{"wall_object":"wall/2@170,641:0"}`},
+	"talk_to_npc":        {"POST", `{"npc":"npc/13:id=95"}`},
+	"attack_npc":         {"POST", `{"npc":"npc/13:id=95"}`},
+	"use_item_on_object": {"POST", `{"item":"inv/1:id=14","object":"object/1@170,640"}`},
 }
 
 func TestGoldenCallResponses(t *testing.T) {

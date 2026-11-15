@@ -276,7 +276,7 @@ func TestObjectsAndInventoryQueries(t *testing.T) {
 	r.want(t, 200, "")
 	items := r.body["result"].([]any)
 	axe := items[0].(map[string]any)
-	if len(items) != 3 || axe["ref"] != "inv/0" || axe["id"] != float64(87) || axe["equipped"] != true || items[2].(map[string]any)["slot"] != float64(2) {
+	if len(items) != 3 || axe["ref"] != "inv/0:id=87" || axe["id"] != float64(87) || axe["equipped"] != true || items[2].(map[string]any)["slot"] != float64(2) {
 		t.Fatalf("get_inventory_items: %v", r.body)
 	}
 
@@ -345,6 +345,45 @@ func TestAtWallObjectThatIsGoneIs410WithoutAPacket(t *testing.T) {
 	}
 	e.do("POST", "/v1/accounts/tester/fn/at_wall_object", `{"wall_object":"object/2@170,641"}`).want(t, 400, "bad_argument")
 	e.do("POST", "/v1/accounts/tester/fn/at_object2", `{"object":"object/1@180,640"}`).want(t, 410, "entity_gone")
+	fa.noPacket(t, 100*time.Millisecond)
+}
+
+func TestEquipItemSendsItsPacket(t *testing.T) {
+	e := newTestEnv(t, "")
+	fa := e.fakeOnline("tester", fakeOpts{setup: withScene})
+
+	e.do("POST", "/v1/accounts/tester/fn/equip_item", `{"item":"inv/0:id=87"}`).want(t, 200, "")
+	if op := fa.nextPacket(t); op != 169 {
+		t.Fatalf("equip_item sent opcode %d, want 169", op)
+	}
+}
+
+// use_item_on_object's success path walks to the object first, which needs the
+// pathfinder (see talk_to_npc below); its arguments are checked here.
+func TestInventoryRefsThatAreGoneOrBad(t *testing.T) {
+	e := newTestEnv(t, "")
+	fa := e.fakeOnline("tester", fakeOpts{setup: withScene}) // an axe (87) in slot 0, logs (14) in 1 and 2
+
+	for _, ref := range []string{
+		"inv/1:id=87", // logs are in that slot, not the axe
+		"inv/3:id=14", // nothing in that slot
+	} {
+		r := e.do("POST", "/v1/accounts/tester/fn/equip_item", `{"item":"`+ref+`"}`)
+		r.want(t, 410, "entity_gone")
+		if got := r.body["error"].(map[string]any)["ref"]; got != ref {
+			t.Fatalf("error ref %v, want %s", got, ref)
+		}
+	}
+	for _, body := range []string{
+		`{"item":"inv/1"}`, `{"item":"inv/01:id=14"}`, `{"item":"object/1@170,640"}`, `{}`,
+	} {
+		e.do("POST", "/v1/accounts/tester/fn/equip_item", body).want(t, 400, "bad_argument")
+	}
+
+	e.do("POST", "/v1/accounts/tester/fn/use_item_on_object", `{"item":"inv/3:id=14","object":"object/1@170,640"}`).want(t, 410, "entity_gone")
+	e.do("POST", "/v1/accounts/tester/fn/use_item_on_object", `{"item":"inv/1:id=14","object":"object/1@172,640"}`).want(t, 410, "entity_gone")
+	e.do("POST", "/v1/accounts/tester/fn/use_item_on_object", `{"item":"inv/1:id=14"}`).want(t, 400, "bad_argument")
+	e.do("POST", "/v1/accounts/tester/fn/use_item_on_object", `{"object":"object/1@170,640"}`).want(t, 400, "bad_argument")
 	fa.noPacket(t, 100*time.Millisecond)
 }
 
@@ -449,6 +488,8 @@ func TestBankingArgumentsAndGoneNPC(t *testing.T) {
 	} {
 		e.do("POST", "/v1/accounts/tester/fn/talk_to_npc", body).want(t, 400, "bad_argument")
 	}
+	e.do("POST", "/v1/accounts/tester/fn/attack_npc", `{"npc":"npc/12:id=65"}`).want(t, 410, "entity_gone")
+	e.do("POST", "/v1/accounts/tester/fn/attack_npc", `{"npc":"banker"}`).want(t, 400, "bad_argument")
 	e.do("POST", "/v1/accounts/tester/fn/answer", `{"index":-1}`).want(t, 400, "bad_argument")
 	e.do("POST", "/v1/accounts/tester/fn/answer", `{"index":20}`).want(t, 400, "bad_argument")
 	e.do("POST", "/v1/accounts/tester/fn/answer", `{"index":2}`).want(t, 400, "bad_argument") // the menu has two options

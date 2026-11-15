@@ -50,6 +50,7 @@ The surface grows one slice at a time, as clients need it (#5). Served so far:
 | path queries | `calculate_path_to`, `calculate_path` |
 | replying to chat | `walk_to` |
 | leaving Tutorial Island | `skip_tutorial` |
+| gear, fighting, cooking (#14) | `equip_item`, `attack_npc`, `use_item_on_object` |
 
 - `walk_path_to` answers `false` for "no path". On that precedent, `use_sleeping_bag`
   answers `true` when a bag was carried and used, and `false` when none was, in which
@@ -71,6 +72,11 @@ The surface grows one slice at a time, as clients need it (#5). Served so far:
   The answer is announced as the `sleep_word_sent` event. When plutonium's hash table
   doesn't know the sleep image it sends `unknown`, and the server, not knowing the answer
   either, accepts any word (`SleepHandler.java:64`).
+- `equip_item` takes an inventory ref as `item`, and `use_item_on_object` takes `item`
+  and `object`, plutonium's parameter names. `attack_npc` and `use_item_on_object` walk
+  to their target first, as `talk_to_npc` and `at_object` do; `equip_item` doesn't move.
+  All three answer `null`; the game's answer comes as events (`server_message`,
+  `npc_damaged`) and in the next queries.
 - `open_bank()` is deliberately not served: it is a script routine with its own timer,
   not a primitive, so the client composes it from `talk_to_npc` and `answer`.
 - `calculate_path_to` and `calculate_path` are queries. Plutonium returns a path
@@ -92,7 +98,9 @@ The surface grows one slice at a time, as clients need it (#5). Served so far:
 ## Entity references
 
 Entities carry a deterministic natural-key `ref`: `npc/412:id=65`, `player/<key>`,
-`object/18@130,512`, `wall/2@130,512:1`, `ground/10@130,512`, `inv/4`. There is no
+`object/18@130,512`, `wall/2@130,512:1`, `ground/10@130,512`, `inv/4:id=87`. An
+inventory ref is the slot and the item's id, since a slot shifts when an earlier item
+leaves (#14). There is no
 registry of handles: a ref is resolved against live state inside the call's closure and
 its embedded type id is checked. A ref whose coordinates now hold a different object (a
 tree turned stump), an NPC index now held by another type of NPC, or nothing, answers

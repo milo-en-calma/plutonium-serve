@@ -411,7 +411,8 @@ func npcArg(c *client, args fnArgs, name string) (*npc, error) {
 }
 
 // inventoryItemView is an inventory item as functions return it. The ref is
-// the slot, which shifts when an earlier item leaves.
+// the slot and the item's id: a slot shifts when an earlier item leaves, and
+// the id is what tells a shifted slot apart.
 type inventoryItemView struct {
 	Ref      string `json:"ref"`
 	ID       int    `json:"id"`
@@ -421,7 +422,35 @@ type inventoryItemView struct {
 }
 
 func inventoryItemViewOf(it *item) inventoryItemView {
-	return inventoryItemView{Ref: fmt.Sprintf("inv/%d", it.slot), ID: it.id, Amount: it.amount, Equipped: it.equipped, Slot: it.slot}
+	return inventoryItemView{Ref: inventoryItemRef(it), ID: it.id, Amount: it.amount, Equipped: it.equipped, Slot: it.slot}
+}
+
+func inventoryItemRef(it *item) string { return fmt.Sprintf("inv/%d:id=%d", it.slot, it.id) }
+
+// parseInventoryItemRef reads "inv/<slot>:id=<id>".
+func parseInventoryItemRef(arg, ref string) (slot, id int, err error) {
+	if !scanRef(ref, "inv/%d:id=%d", &slot, &id) {
+		return 0, 0, badArg(arg, "is not an inventory ref (inv/<slot>:id=<id>)")
+	}
+	return slot, id, nil
+}
+
+// inventoryItemArg resolves an inventory ref against what the player carries
+// right now. Another item in that slot, after an earlier one left, is gone
+// too, which is why the ref carries the id.
+func inventoryItemArg(c *client, args fnArgs, name string) (*item, error) {
+	ref, err := args.String(name)
+	if err != nil {
+		return nil, err
+	}
+	slot, id, err := parseInventoryItemRef(name, ref)
+	if err != nil {
+		return nil, err
+	}
+	if slot >= c.inventoryCount || c.inventory[slot].id != id {
+		return nil, goneError(ref)
+	}
+	return c.inventory[slot], nil
 }
 
 // The served functions, added a slice at a time (#5).
@@ -626,6 +655,38 @@ func init() {
 			kind: fnQuery,
 			call: func(c *client, _ fnArgs) (any, error) { return 30 - c.inventoryCount, nil },
 		},
+		// Wielding or wearing an item, as a left click in the inventory does.
+		&fnSpec{
+			name:   "equip_item",
+			kind:   fnAction,
+			params: []param{{name: "item", required: true}},
+			call: func(c *client, args fnArgs) (any, error) {
+				it, err := inventoryItemArg(c, args, "item")
+				if err != nil {
+					return nil, err
+				}
+				c.equipInventoryItem(it)
+				return nil, nil
+			},
+		},
+		// Using an item on scenery, e.g. raw meat on a range. Walks there first.
+		&fnSpec{
+			name:   "use_item_on_object",
+			kind:   fnAction,
+			params: []param{{name: "item", required: true}, {name: "object", required: true}},
+			call: func(c *client, args fnArgs) (any, error) {
+				it, err := inventoryItemArg(c, args, "item")
+				if err != nil {
+					return nil, err
+				}
+				o, err := objectArg(c, args, "object")
+				if err != nil {
+					return nil, err
+				}
+				c.useInventoryItemOnObject(it, o)
+				return nil, nil
+			},
+		},
 
 		// NPCs (banking talks to a banker).
 		&fnSpec{
@@ -649,6 +710,20 @@ func init() {
 					return nil, err
 				}
 				c.talkToNPC(n)
+				return nil, nil
+			},
+		},
+		// Attacking an NPC. Walks there first.
+		&fnSpec{
+			name:   "attack_npc",
+			kind:   fnAction,
+			params: []param{{name: "npc", required: true}},
+			call: func(c *client, args fnArgs) (any, error) {
+				n, err := npcArg(c, args, "npc")
+				if err != nil {
+					return nil, err
+				}
+				c.attackNPC(n)
 				return nil, nil
 			},
 		},
