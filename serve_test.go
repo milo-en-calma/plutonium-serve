@@ -558,6 +558,77 @@ func TestBankingActionsSendPackets(t *testing.T) {
 	}
 }
 
+func TestBankIsNullUntilOpenedInThisLogin(t *testing.T) {
+	e := newTestEnv(t, "")
+	e.fakeOnline("tester", fakeOpts{})
+
+	if r := e.do("GET", "/v1/accounts/tester/fn/get_bank_items", ""); r.status != 200 || r.body["result"] != nil {
+		t.Fatalf("get_bank_items before the bank was opened: %d %v", r.status, r.body)
+	}
+	if r := e.do("GET", "/v1/accounts/tester/fn/get_bank_count?id=169", ""); r.status != 200 || r.body["result"] != nil {
+		t.Fatalf("get_bank_count before the bank was opened: %d %v", r.status, r.body)
+	}
+	// Its arguments are still checked.
+	e.do("GET", "/v1/accounts/tester/fn/get_bank_count", "").want(t, 400, "bad_argument")
+}
+
+func TestBankContentsFollowItsPackets(t *testing.T) {
+	e := newTestEnv(t, "")
+	e.fakeOnline("tester", fakeOpts{setup: func(c *client) {
+		feed(c, 42, u16(2), u16(192), u16(169), u32(13), u16(62), u32(4)) // opened: 13 bars, 4 daggers
+		feed(c, 249, u8(0), u16(169), u32(8))                             // 5 bars taken out
+		feed(c, 249, u8(1), u16(62), u32(0))                              // every dagger taken out
+		feed(c, 249, u8(1), u16(436), u32(2))                             // 2 copper ore put in
+		feed(c, 203)                                                      // closed
+	}})
+
+	r := e.do("GET", "/v1/accounts/tester/fn/get_bank_items", "")
+	r.want(t, 200, "")
+	items := r.body["result"].([]any)
+	want := []map[string]any{{"id": float64(169), "amount": float64(8)}, {"id": float64(436), "amount": float64(2)}}
+	if len(items) != len(want) {
+		t.Fatalf("get_bank_items: %v", r.body)
+	}
+	for i, w := range want {
+		got := items[i].(map[string]any)
+		if got["id"] != w["id"] || got["amount"] != w["amount"] {
+			t.Fatalf("get_bank_items[%d] = %v, want %v", i, got, w)
+		}
+	}
+
+	for query, count := range map[string]float64{"id=169": 8, "id=62": 0, "ids=169,436": 10, "ids=62": 0} {
+		if r := e.do("GET", "/v1/accounts/tester/fn/get_bank_count?"+query, ""); r.body["result"] != count {
+			t.Fatalf("get_bank_count?%s: %v, want %v", query, r.body, count)
+		}
+	}
+}
+
+func TestEmptyBankIsAnArrayNotNull(t *testing.T) {
+	e := newTestEnv(t, "")
+	e.fakeOnline("tester", fakeOpts{setup: func(c *client) { feed(c, 42, u16(0), u16(192)) }})
+	if list, ok := e.do("GET", "/v1/accounts/tester/fn/get_bank_items", "").body["result"].([]any); !ok || len(list) != 0 {
+		t.Fatalf("an opened, empty bank should be an empty array: %v", list)
+	}
+}
+
+func TestWithdrawSendsItsPacketAndChecksArguments(t *testing.T) {
+	e := newTestEnv(t, "")
+	fa := e.fakeOnline("tester", fakeOpts{})
+
+	for _, body := range []string{`{"id":169,"amount":0}`, `{"id":70000,"amount":1}`, `{"id":-1,"amount":1}`, `{"id":169}`, `{"amount":1}`} {
+		e.do("POST", "/v1/accounts/tester/fn/withdraw", body).want(t, 400, "bad_argument")
+	}
+	for _, query := range []string{"id=169&ids=169", "ids=169,", "ids=169,x", "id=70000", "id=x"} {
+		e.do("GET", "/v1/accounts/tester/fn/get_bank_count?"+query, "").want(t, 400, "bad_argument")
+	}
+	fa.noPacket(t, 100*time.Millisecond)
+
+	e.do("POST", "/v1/accounts/tester/fn/withdraw", `{"id":169,"amount":5}`).want(t, 200, "")
+	if op := fa.nextPacket(t); op != 22 {
+		t.Fatalf("withdraw sent opcode %d, want 22", op)
+	}
+}
+
 func TestSkipTutorialSendsItsPacket(t *testing.T) {
 	e := newTestEnv(t, "")
 	fa := e.fakeOnline("tester", fakeOpts{})

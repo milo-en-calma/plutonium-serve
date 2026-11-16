@@ -164,6 +164,10 @@ type client struct {
 	pathFindSource            [96][96]int16
 	systemUpdate              bool
 
+	// bankSeen is whether the bank has been opened in this login, so
+	// bankItems holds its contents rather than nothing yet (serve mode).
+	bankSeen bool
+
 	blackhole bool
 }
 
@@ -2360,6 +2364,7 @@ func (c *client) handlePacket(p *RSCPacket, opcode, length int) {
 		}
 	case 42: // open bank
 		c.banking = true
+		c.bankSeen = true
 		c.bankItemCount = p.readShort()
 		c.maxBankItemCount = p.readShort()
 		c.bankItems = c.bankItems[:0]

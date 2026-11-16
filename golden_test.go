@@ -150,7 +150,8 @@ func firstName(evs []event) string {
 
 // goldenScene gives a fake client something for every query to report: a
 // position and fatigue, a tree and a stump, a door, an axe, a log and a sleeping bag,
-// a log on the ground, a banker in view with the banker's menu showing.
+// a log on the ground, a bank seen and closed again, a banker in view with the
+// banker's menu showing.
 func goldenScene(c *client) {
 	c.x, c.z = 220, 634
 	// A map with no landscape loaded, all open ground, for the path queries.
@@ -169,6 +170,10 @@ func goldenScene(c *client) {
 	c.inventoryCount = 3
 	c.groundItems[0] = &groundItem{id: 14, x: 221, z: 634}
 	c.groundItemCount = 1
+	// The bank was opened earlier in this login, holding 13 bars (169) and 4
+	// daggers (62), and has been closed since.
+	feed(c, 42, u16(2), u16(192), u16(169), u32(13), u16(62), u32(4))
+	feed(c, 203)
 	c.npcs[0] = &npc{id: 95, serverIndex: 12, x: 220, z: 636, currentHP: 1, maxHP: 1}
 	c.npcCount = 1
 	c.optionMenu[0] = "I'd like to access my bank account please"
@@ -197,6 +202,8 @@ var callScenarios = map[string]callScenario{
 	"is_bank_open":        {"GET", ""},
 	"is_sleeping":         {"GET", ""},
 	"get_ground_items":    {"GET", ""},
+	"get_bank_items":      {"GET", ""},
+	"get_bank_count":      {"GET", "id=169"},
 	// goldenScene's map has no landscape loaded, so it is open ground and
 	// these find straight paths.
 	"calculate_path_to":  {"GET", "x=223&z=634"},
@@ -204,6 +211,7 @@ var callScenarios = map[string]callScenario{
 	"send_chat_message":  {"POST", `{"message":"hello"}`},
 	"answer":             {"POST", `{"index":0}`},
 	"deposit":            {"POST", `{"id":14,"amount":1}`},
+	"withdraw":           {"POST", `{"id":169,"amount":5}`},
 	"close_bank":         {"POST", `{}`},
 	"equip_item":         {"POST", `{"item":"inv/1:id=14"}`},
 	"use_item":           {"POST", `{"item":"inv/1:id=14"}`},

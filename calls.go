@@ -16,6 +16,7 @@ import (
 	"net/url"
 	"runtime/debug"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -228,6 +229,54 @@ func (a fnArgs) coordinate(name string) (int16, error) {
 		return 0, badArg(name, "is not a world coordinate")
 	}
 	return int16(n), nil
+}
+
+// --- items by id (the bank) ------------------------------------------------------
+
+// bankItemView is one of the bank's items: its id and how many.
+type bankItemView struct {
+	ID     int `json:"id"`
+	Amount int `json:"amount"`
+}
+
+// itemID reads an integer argument that must be an item id.
+func itemID(args fnArgs, name string) (int, error) {
+	id, err := args.Int(name)
+	if err != nil {
+		return 0, err
+	}
+	if id < 0 || id > math.MaxUint16 {
+		return 0, badArg(name, "is not an item id")
+	}
+	return id, nil
+}
+
+// idOrIDs reads plutonium's "id OR ids=[...]": exactly one of id, or ids as
+// a comma-separated list of item ids.
+func idOrIDs(args fnArgs) ([]int, error) {
+	switch hasID, hasIDs := args.has("id"), args.has("ids"); {
+	case hasID == hasIDs:
+		return nil, badArg("id", "give exactly one of id or ids")
+	case hasID:
+		id, err := itemID(args, "id")
+		if err != nil {
+			return nil, err
+		}
+		return []int{id}, nil
+	}
+	list, err := args.String("ids")
+	if err != nil {
+		return nil, err
+	}
+	var ids []int
+	for _, s := range strings.Split(list, ",") {
+		id, err := strconv.Atoi(s)
+		if err != nil || id < 0 || id > math.MaxUint16 {
+			return nil, badArg("ids", "must be item ids separated by commas")
+		}
+		ids = append(ids, id)
+	}
+	return ids, nil
 }
 
 // --- paths (SERVE.md, "Calls") -----------------------------------------------------
@@ -914,7 +963,7 @@ func init() {
 			kind:   fnAction,
 			params: []param{{name: "id", required: true}, {name: "amount", required: true}},
 			call: func(c *client, args fnArgs) (any, error) {
-				id, err := args.Int("id")
+				id, err := itemID(args, "id")
 				if err != nil {
 					return nil, err
 				}
@@ -922,14 +971,68 @@ func init() {
 				if err != nil {
 					return nil, err
 				}
-				if id < 0 || id > math.MaxUint16 {
-					return nil, badArg("id", "is not an item id")
-				}
 				if amount <= 0 {
 					return nil, badArg("amount", "must be positive")
 				}
 				c.deposit(id, amount)
 				return nil, nil
+			},
+		},
+		&fnSpec{
+			name:   "withdraw",
+			kind:   fnAction,
+			params: []param{{name: "id", required: true}, {name: "amount", required: true}},
+			call: func(c *client, args fnArgs) (any, error) {
+				id, err := itemID(args, "id")
+				if err != nil {
+					return nil, err
+				}
+				amount, err := args.Int("amount")
+				if err != nil {
+					return nil, err
+				}
+				if amount <= 0 {
+					return nil, badArg("amount", "must be positive")
+				}
+				c.withdraw(id, amount)
+				return nil, nil
+			},
+		},
+		// The bank's contents. null until the bank has been opened in this
+		// login: until then the client has never been sent them, and an empty
+		// list would read as an empty bank. Afterwards, the last contents
+		// seen, which stay true while the window is shut, since a bank only
+		// changes while open.
+		&fnSpec{
+			name: "get_bank_items",
+			kind: fnQuery,
+			call: func(c *client, _ fnArgs) (any, error) {
+				if !c.bankSeen {
+					return nil, nil
+				}
+				out := make([]bankItemView, c.bankItemCount)
+				for i := range out {
+					out[i] = bankItemView{ID: c.bankItems[i].id, Amount: c.bankItems[i].amount}
+				}
+				return out, nil
+			},
+		},
+		// How many of an item, or of several together, the bank holds; null
+		// until it has been opened in this login, as get_bank_items. Takes
+		// exactly one of id, or ids as a comma-separated list.
+		&fnSpec{
+			name:   "get_bank_count",
+			kind:   fnQuery,
+			params: []param{{name: "id"}, {name: "ids"}},
+			call: func(c *client, args fnArgs) (any, error) {
+				ids, err := idOrIDs(args)
+				if err != nil {
+					return nil, err
+				}
+				if !c.bankSeen {
+					return nil, nil
+				}
+				return c.bankCount(ids...), nil
 			},
 		},
 		&fnSpec{

@@ -53,6 +53,7 @@ The surface grows one slice at a time, as clients need it (#5). Served so far:
 | gear, fighting, cooking (#14) | `equip_item`, `attack_npc`, `use_item_on_object` |
 | carried items (#15) | `use_item`, `drop_item`, `use_item_with_item`, `use_item_on_npc` |
 | ground items (#15) | `get_ground_items`, `pickup_item`, `use_item_on_ground_item` |
+| the bank's contents (#15) | `withdraw`, `get_bank_items`, `get_bank_count` |
 
 - `walk_path_to` answers `false` for "no path". On that precedent, `use_sleeping_bag`
   answers `true` when a bag was carried and used, and `false` when none was, in which
@@ -90,6 +91,13 @@ The surface grows one slice at a time, as clients need it (#5). Served so far:
   `use_item_on_ground_item` takes `item` and `ground_item` (a tinderbox on logs); both walk
   there first and answer `null`. A ground ref names an item of that id on that tile, and
   several alike on one tile are one to these calls; none there answers `410 entity_gone`.
+- `get_bank_items` answers `[{"id", "amount"}, …]`, and `get_bank_count` takes exactly one of
+  `id` or `ids` (comma-separated) and answers their total. Both answer **`null` until the
+  bank has been opened in this login**: until then the client has never been sent the
+  bank's contents, and an empty list would read as an empty bank. Afterwards they answer the
+  last contents seen, which stay true while the window is shut, since a bank only changes
+  while open; the `session` counter says when a relogin has made them unknown again.
+  `withdraw` takes `id` and `amount`, checked as `deposit`'s are, and answers `null`.
 - `open_bank()` is deliberately not served: it is a script routine with its own timer,
   not a primitive, so the client composes it from `talk_to_npc` and `answer`.
 - `calculate_path_to` and `calculate_path` are queries. Plutonium returns a path
