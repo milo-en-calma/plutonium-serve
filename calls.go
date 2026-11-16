@@ -410,6 +410,34 @@ func npcArg(c *client, args fnArgs, name string) (*npc, error) {
 	return nil, goneError(ref)
 }
 
+// parseGroundItemRef reads "ground/<id>@<x>,<z>".
+func parseGroundItemRef(arg, ref string) (id, x, z int, err error) {
+	if !scanRef(ref, "ground/%d@%d,%d", &id, &x, &z) {
+		return 0, 0, 0, badArg(arg, "is not a ground item ref (ground/<id>@<x>,<z>)")
+	}
+	return id, x, z, nil
+}
+
+// groundItemArg resolves a ground item ref against the items in view right
+// now: an item of that id on that tile. Several alike on one tile are the
+// same to pick up or use, so the first is taken.
+func groundItemArg(c *client, args fnArgs, name string) (*groundItem, error) {
+	ref, err := args.String(name)
+	if err != nil {
+		return nil, err
+	}
+	id, x, z, err := parseGroundItemRef(name, ref)
+	if err != nil {
+		return nil, err
+	}
+	for i := 0; i < c.groundItemCount; i++ {
+		if g := c.groundItems[i]; g.id == id && g.x == x && g.z == z {
+			return g, nil
+		}
+	}
+	return nil, goneError(ref)
+}
+
 // inventoryItemView is an inventory item as functions return it. The ref is
 // the slot and the item's id: a slot shifts when an earlier item leaves, and
 // the id is what tells a shifted slot apart.
@@ -754,6 +782,52 @@ func init() {
 					return nil, err
 				}
 				c.useInventoryItemOnNPC(it, n)
+				return nil, nil
+			},
+		},
+
+		// Items on the ground, as the ground_item_spawned event shows them.
+		&fnSpec{
+			name: "get_ground_items",
+			kind: fnQuery,
+			call: func(c *client, _ fnArgs) (any, error) {
+				out := make([]groundItemView, c.groundItemCount)
+				for i := range out {
+					out[i] = groundItemViewOf(c.groundItems[i])
+				}
+				return out, nil
+			},
+		},
+		// Picking an item up. Walks there first.
+		&fnSpec{
+			name:   "pickup_item",
+			kind:   fnAction,
+			params: []param{{name: "ground_item", required: true}},
+			call: func(c *client, args fnArgs) (any, error) {
+				g, err := groundItemArg(c, args, "ground_item")
+				if err != nil {
+					return nil, err
+				}
+				c.pickupGroundItem(g)
+				return nil, nil
+			},
+		},
+		// Using a carried item on one on the ground, e.g. a tinderbox on logs.
+		// Walks there first.
+		&fnSpec{
+			name:   "use_item_on_ground_item",
+			kind:   fnAction,
+			params: []param{{name: "item", required: true}, {name: "ground_item", required: true}},
+			call: func(c *client, args fnArgs) (any, error) {
+				it, err := inventoryItemArg(c, args, "item")
+				if err != nil {
+					return nil, err
+				}
+				g, err := groundItemArg(c, args, "ground_item")
+				if err != nil {
+					return nil, err
+				}
+				c.useInventoryItemOnGroundItem(it, g)
 				return nil, nil
 			},
 		},

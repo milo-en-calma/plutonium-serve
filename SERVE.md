@@ -52,6 +52,7 @@ The surface grows one slice at a time, as clients need it (#5). Served so far:
 | leaving Tutorial Island | `skip_tutorial` |
 | gear, fighting, cooking (#14) | `equip_item`, `attack_npc`, `use_item_on_object` |
 | carried items (#15) | `use_item`, `drop_item`, `use_item_with_item`, `use_item_on_npc` |
+| ground items (#15) | `get_ground_items`, `pickup_item`, `use_item_on_ground_item` |
 
 - `walk_path_to` answers `false` for "no path". On that precedent, `use_sleeping_bag`
   answers `true` when a bag was carried and used, and `false` when none was, in which
@@ -84,6 +85,11 @@ The surface grows one slice at a time, as clients need it (#5). Served so far:
   which a JSON body can't hold twice. The same slot twice is a `bad_argument`.
   `use_item_on_npc` takes `item` and `npc` and walks to the NPC first, as `attack_npc` does.
   All four answer `null`.
+- `get_ground_items` answers the items in view as the `ground_item_spawned` event shows
+  them, each with its `ground/<id>@<x>,<z>` ref. `pickup_item` takes `ground_item`, and
+  `use_item_on_ground_item` takes `item` and `ground_item` (a tinderbox on logs); both walk
+  there first and answer `null`. A ground ref names an item of that id on that tile, and
+  several alike on one tile are one to these calls; none there answers `410 entity_gone`.
 - `open_bank()` is deliberately not served: it is a script routine with its own timer,
   not a primitive, so the client composes it from `talk_to_npc` and `answer`.
 - `calculate_path_to` and `calculate_path` are queries. Plutonium returns a path

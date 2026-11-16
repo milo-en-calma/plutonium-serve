@@ -397,6 +397,66 @@ func TestCarriedItemArgumentsThatAreGoneOrBad(t *testing.T) {
 	fa.noPacket(t, 100*time.Millisecond)
 }
 
+// withGroundItems gives a fake client logs (14) and bones (20) on the ground,
+// and a second log on the same tile as the first.
+func withGroundItems(c *client) {
+	withScene(c)
+	for i, g := range []*groundItem{{id: 14, x: 171, z: 641}, {id: 20, x: 169, z: 642}, {id: 14, x: 171, z: 641}} {
+		c.groundItems[i] = g
+	}
+	c.groundItemCount = 3
+}
+
+func TestGroundItemsQuery(t *testing.T) {
+	e := newTestEnv(t, "")
+	e.fakeOnline("tester", fakeOpts{setup: withGroundItems})
+
+	r := e.do("GET", "/v1/accounts/tester/fn/get_ground_items", "")
+	r.want(t, 200, "")
+	items := r.body["result"].([]any)
+	bones := items[1].(map[string]any)
+	if len(items) != 3 || items[0].(map[string]any)["ref"] != "ground/14@171,641" || bones["id"] != float64(20) || bones["x"] != float64(169) || bones["z"] != float64(642) {
+		t.Fatalf("get_ground_items: %v", r.body)
+	}
+
+	e = newTestEnv(t, "")
+	e.fakeOnline("tester", fakeOpts{})
+	if list, ok := e.do("GET", "/v1/accounts/tester/fn/get_ground_items", "").body["result"].([]any); !ok || len(list) != 0 {
+		t.Fatalf("no ground items should be an empty array: %v", list)
+	}
+}
+
+// pickup_item and use_item_on_ground_item walk there first, which needs the
+// pathfinder (see talk_to_npc below); their arguments are checked here.
+func TestGroundItemRefsThatAreGoneOrBad(t *testing.T) {
+	e := newTestEnv(t, "")
+	fa := e.fakeOnline("tester", fakeOpts{setup: withGroundItems})
+
+	for _, ref := range []string{
+		"ground/20@171,641", // logs lie there, not bones
+		"ground/14@180,641", // nothing there
+	} {
+		for _, step := range []struct{ fn, body string }{
+			{"pickup_item", `{"ground_item":"` + ref + `"}`},
+			{"use_item_on_ground_item", `{"item":"inv/1:id=14","ground_item":"` + ref + `"}`},
+		} {
+			r := e.do("POST", "/v1/accounts/tester/fn/"+step.fn, step.body)
+			r.want(t, 410, "entity_gone")
+			if got := r.body["error"].(map[string]any)["ref"]; got != ref {
+				t.Fatalf("%s: error ref %v, want %s", step.fn, got, ref)
+			}
+		}
+	}
+	for _, body := range []string{
+		`{"ground_item":"ground/14@171"}`, `{"ground_item":"ground/014@171,641"}`, `{"ground_item":"object/1@170,640"}`, `{}`,
+	} {
+		e.do("POST", "/v1/accounts/tester/fn/pickup_item", body).want(t, 400, "bad_argument")
+	}
+	e.do("POST", "/v1/accounts/tester/fn/use_item_on_ground_item", `{"item":"inv/3:id=14","ground_item":"ground/14@171,641"}`).want(t, 410, "entity_gone")
+	e.do("POST", "/v1/accounts/tester/fn/use_item_on_ground_item", `{"ground_item":"ground/14@171,641"}`).want(t, 400, "bad_argument")
+	fa.noPacket(t, 100*time.Millisecond)
+}
+
 // use_item_on_object's success path walks to the object first, which needs the
 // pathfinder (see talk_to_npc below); its arguments are checked here.
 func TestInventoryRefsThatAreGoneOrBad(t *testing.T) {

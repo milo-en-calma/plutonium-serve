@@ -150,7 +150,7 @@ func firstName(evs []event) string {
 
 // goldenScene gives a fake client something for every query to report: a
 // position and fatigue, a tree and a stump, a door, an axe, a log and a sleeping bag,
-// a banker in view with the banker's menu showing.
+// a log on the ground, a banker in view with the banker's menu showing.
 func goldenScene(c *client) {
 	c.x, c.z = 220, 634
 	// A map with no landscape loaded, all open ground, for the path queries.
@@ -167,6 +167,8 @@ func goldenScene(c *client) {
 		c.inventory[i] = it
 	}
 	c.inventoryCount = 3
+	c.groundItems[0] = &groundItem{id: 14, x: 221, z: 634}
+	c.groundItemCount = 1
 	c.npcs[0] = &npc{id: 95, serverIndex: 12, x: 220, z: 636, currentHP: 1, maxHP: 1}
 	c.npcCount = 1
 	c.optionMenu[0] = "I'd like to access my bank account please"
@@ -194,6 +196,7 @@ var callScenarios = map[string]callScenario{
 	"get_option_menu":     {"GET", ""},
 	"is_bank_open":        {"GET", ""},
 	"is_sleeping":         {"GET", ""},
+	"get_ground_items":    {"GET", ""},
 	// goldenScene's map has no landscape loaded, so it is open ground and
 	// these find straight paths.
 	"calculate_path_to":  {"GET", "x=223&z=634"},
@@ -214,15 +217,17 @@ var callScenarios = map[string]callScenario{
 // archive these tests don't load; their gone answers are pinned instead, and
 // the live suite covers their success.
 var pathfindingFunctions = map[string]callScenario{
-	"walk_path_to":       {"POST", `{"x":-1,"z":0}`}, // a bad_argument: the call shape, without walking
-	"walk_to":            {"POST", `{"x":-1,"z":0}`}, // likewise: it plans within the loaded region, which the scene doesn't set
-	"at_object":          {"POST", `{"object":"object/1@170,640"}`},
-	"at_object2":         {"POST", `{"object":"object/1@170,640"}`},
-	"at_wall_object":     {"POST", `{"wall_object":"wall/2@170,641:0"}`},
-	"talk_to_npc":        {"POST", `{"npc":"npc/13:id=95"}`},
-	"attack_npc":         {"POST", `{"npc":"npc/13:id=95"}`},
-	"use_item_on_object": {"POST", `{"item":"inv/1:id=14","object":"object/1@170,640"}`},
-	"use_item_on_npc":    {"POST", `{"item":"inv/1:id=14","npc":"npc/13:id=95"}`},
+	"walk_path_to":            {"POST", `{"x":-1,"z":0}`}, // a bad_argument: the call shape, without walking
+	"walk_to":                 {"POST", `{"x":-1,"z":0}`}, // likewise: it plans within the loaded region, which the scene doesn't set
+	"at_object":               {"POST", `{"object":"object/1@170,640"}`},
+	"at_object2":              {"POST", `{"object":"object/1@170,640"}`},
+	"at_wall_object":          {"POST", `{"wall_object":"wall/2@170,641:0"}`},
+	"talk_to_npc":             {"POST", `{"npc":"npc/13:id=95"}`},
+	"attack_npc":              {"POST", `{"npc":"npc/13:id=95"}`},
+	"use_item_on_object":      {"POST", `{"item":"inv/1:id=14","object":"object/1@170,640"}`},
+	"use_item_on_npc":         {"POST", `{"item":"inv/1:id=14","npc":"npc/13:id=95"}`},
+	"pickup_item":             {"POST", `{"ground_item":"ground/14@222,634"}`},
+	"use_item_on_ground_item": {"POST", `{"item":"inv/1:id=14","ground_item":"ground/14@222,634"}`},
 }
 
 func TestGoldenCallResponses(t *testing.T) {
