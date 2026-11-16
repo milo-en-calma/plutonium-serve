@@ -1,0 +1,15 @@
+{
+  "result": [
+    {
+      "ref": "player/ann_example",
+      "username": "Ann Example",
+      "x": 223,
+      "z": 636,
+      "hp": 10,
+      "max_hp": 10,
+      "combat_level": 3
+    }
+  ],
+  "session": 1
+}
+

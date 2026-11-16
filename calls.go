@@ -893,6 +893,22 @@ func init() {
 				return out, nil
 			},
 		},
+		// The other players in view (#16), as the player events show them. The
+		// account's own character is in plutonium's list too, put there by the
+		// coordinates packet; it is left out, by its server index.
+		&fnSpec{
+			name: "get_players",
+			kind: fnQuery,
+			call: func(c *client, _ fnArgs) (any, error) {
+				out := make([]playerView, 0, c.playerCount)
+				for i := 0; i < c.playerCount; i++ {
+					if p := c.players[i]; p != nil && p.serverIndex != c.serverIndex {
+						out = append(out, playerViewOf(p))
+					}
+				}
+				return out, nil
+			},
+		},
 		&fnSpec{
 			name:   "talk_to_npc",
 			kind:   fnAction,

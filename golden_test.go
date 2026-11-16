@@ -151,7 +151,7 @@ func firstName(evs []event) string {
 // goldenScene gives a fake client something for every query to report: a
 // position and fatigue, a tree and a stump, a door, an axe, a log and a sleeping bag,
 // a log on the ground, a bank seen and closed again, a banker in view with the
-// banker's menu showing.
+// banker's menu showing, and another player nearby.
 func goldenScene(c *client) {
 	c.x, c.z = 220, 634
 	// A map with no landscape loaded, all open ground, for the path queries.
@@ -180,6 +180,11 @@ func goldenScene(c *client) {
 	c.optionMenu[1] = "What is this place?"
 	c.optionMenuCount = 2
 	c.optionMenuVisible = true
+	// Its own character, first in plutonium's list, and one other player nearby.
+	c.serverIndex = 3
+	c.players[0] = &player{serverIndex: 3, username: "Pat Sample", x: 220, z: 634}
+	c.players[1] = &player{serverIndex: 8, username: "Ann Example", x: 223, z: 636, currentHP: 10, maxHP: 10, combatLevel: 3}
+	c.playerCount = 2
 }
 
 // callScenario is one request whose exact response is pinned. A GET's body is
@@ -197,6 +202,7 @@ var callScenarios = map[string]callScenario{
 	"get_inventory_items": {"GET", ""},
 	"get_empty_slots":     {"GET", ""},
 	"get_npcs":            {"GET", ""},
+	"get_players":         {"GET", ""},
 	"is_option_menu":      {"GET", ""},
 	"get_option_menu":     {"GET", ""},
 	"is_bank_open":        {"GET", ""},

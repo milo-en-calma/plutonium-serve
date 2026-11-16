@@ -486,6 +486,41 @@ func TestInventoryRefsThatAreGoneOrBad(t *testing.T) {
 	fa.noPacket(t, 100*time.Millisecond)
 }
 
+// withPlayers gives a fake client two other players in view, after its own
+// character, which plutonium's list holds first.
+func withPlayers(c *client) {
+	c.x, c.z = 220, 634
+	c.serverIndex = 3
+	for i, p := range []*player{
+		{serverIndex: 3, username: "Pat Sample", x: 220, z: 634},
+		{serverIndex: 8, username: "Ann Example", x: 223, z: 636, currentHP: 9, maxHP: 10, combatLevel: 4},
+		{serverIndex: 11, username: "Lee Placeholder", x: 215, z: 630},
+	} {
+		c.players[i] = p
+	}
+	c.playerCount = 3
+}
+
+func TestPlayersQueryLeavesOutTheOwnCharacter(t *testing.T) {
+	e := newTestEnv(t, "")
+	e.fakeOnline("tester", fakeOpts{setup: withPlayers})
+
+	r := e.do("GET", "/v1/accounts/tester/fn/get_players", "")
+	r.want(t, 200, "")
+	players := r.body["result"].([]any)
+	if len(players) != 2 {
+		t.Fatalf("get_players: want the two others, got %v", r.body)
+	}
+	ann := players[0].(map[string]any)
+	if ann["ref"] != "player/ann_example" || ann["username"] != "Ann Example" || ann["x"] != float64(223) || ann["z"] != float64(636) ||
+		ann["hp"] != float64(9) || ann["max_hp"] != float64(10) || ann["combat_level"] != float64(4) {
+		t.Fatalf("get_players: %v", ann)
+	}
+	if players[1].(map[string]any)["username"] != "Lee Placeholder" {
+		t.Fatalf("get_players: %v", players[1])
+	}
+}
+
 // withBanker gives a fake client a banker (95) at server index 12 in view,
 // and the banker's option menu showing.
 func withBanker(c *client) {
@@ -525,7 +560,7 @@ func TestNPCAndOptionMenuQueries(t *testing.T) {
 func TestEmptyNPCsAndMenuAreArraysNotNull(t *testing.T) {
 	e := newTestEnv(t, "")
 	e.fakeOnline("tester", fakeOpts{})
-	for _, fn := range []string{"get_npcs", "get_option_menu"} {
+	for _, fn := range []string{"get_npcs", "get_option_menu", "get_players"} {
 		r := e.do("GET", "/v1/accounts/tester/fn/"+fn, "")
 		if list, ok := r.body["result"].([]any); !ok || len(list) != 0 {
 			t.Fatalf("%s: %v", fn, r.body)

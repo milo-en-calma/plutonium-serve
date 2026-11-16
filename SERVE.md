@@ -54,6 +54,7 @@ The surface grows one slice at a time, as clients need it (#5). Served so far:
 | carried items (#15) | `use_item`, `drop_item`, `use_item_with_item`, `use_item_on_npc` |
 | ground items (#15) | `get_ground_items`, `pickup_item`, `use_item_on_ground_item` |
 | the bank's contents (#15) | `withdraw`, `get_bank_items`, `get_bank_count` |
+| other players (#16) | `get_players` |
 
 - `walk_path_to` answers `false` for "no path". On that precedent, `use_sleeping_bag`
   answers `true` when a bag was carried and used, and `false` when none was, in which
@@ -98,6 +99,10 @@ The surface grows one slice at a time, as clients need it (#5). Served so far:
   last contents seen, which stay true while the window is shut, since a bank only changes
   while open; the `session` counter says when a relogin has made them unknown again.
   `withdraw` takes `id` and `amount`, checked as `deposit`'s are, and answers `null`.
+- `get_players` answers the other players in view, in the shape the player events use
+  (`ref`, `username`, `x`, `z`, `hp`, `max_hp`, `combat_level`), with the same coordinates
+  as `get_x` and `get_z`. Plutonium's list holds the account's own character too, first;
+  it is left out. An empty list when nobody else is in view.
 - `open_bank()` is deliberately not served: it is a script routine with its own timer,
   not a primitive, so the client composes it from `talk_to_npc` and `answer`.
 - `calculate_path_to` and `calculate_path` are queries. Plutonium returns a path
