@@ -279,6 +279,49 @@ func idOrIDs(args fnArgs) ([]int, error) {
 	return ids, nil
 }
 
+// --- stats and combat (#17) ------------------------------------------------------
+
+const (
+	// combatStyleCount is how many combat styles there are: 0 controlled,
+	// 1 aggressive, 2 accurate, 3 defensive (ids/combat.txt).
+	combatStyleCount = 4
+	// spellCount is how many spells there are, ids 0 to 47 (ids/spells.txt).
+	spellCount = 48
+)
+
+// skillID reads the id argument as a skill id, 0 attack to 17 thieving
+// (ids/skills.txt).
+func skillID(args fnArgs) (int, error) {
+	id, err := args.Int("id")
+	if err != nil {
+		return 0, err
+	}
+	if id < 0 || id >= skillCount {
+		return 0, badArg("id", fmt.Sprintf("is not a skill id (0 to %d)", skillCount-1))
+	}
+	return id, nil
+}
+
+// statQuery is a query answering one skill's entry in stats, or null until
+// the server has sent the stats in this login: every entry is 0 before then.
+func statQuery(name string, stats func(c *client) *[skillCount]int) *fnSpec {
+	return &fnSpec{
+		name:   name,
+		kind:   fnQuery,
+		params: []param{{name: "id", required: true}},
+		call: func(c *client, args fnArgs) (any, error) {
+			id, err := skillID(args)
+			if err != nil {
+				return nil, err
+			}
+			if !c.statsSeen {
+				return nil, nil
+			}
+			return stats(c)[id], nil
+		},
+	}
+}
+
 // --- paths (SERVE.md, "Calls") -----------------------------------------------------
 
 // pathParams are calculate_path's and calculate_path_to's optional arguments,
@@ -933,6 +976,80 @@ func init() {
 					return nil, err
 				}
 				c.attackNPC(n)
+				return nil, nil
+			},
+		},
+		// Casting a spell at an NPC (#17). As in plutonium, it doesn't walk
+		// there first.
+		&fnSpec{
+			name:   "cast_on_npc",
+			kind:   fnAction,
+			params: []param{{name: "spell_id", required: true}, {name: "npc", required: true}},
+			call: func(c *client, args fnArgs) (any, error) {
+				spell, err := args.Int("spell_id")
+				if err != nil {
+					return nil, err
+				}
+				if spell < 0 || spell >= spellCount {
+					return nil, badArg("spell_id", fmt.Sprintf("is not a spell id (0 to %d)", spellCount-1))
+				}
+				n, err := npcArg(c, args, "npc")
+				if err != nil {
+					return nil, err
+				}
+				c.castOnNPC(spell, n)
+				return nil, nil
+			},
+		},
+
+		// Stats and combat (#17). The stats are null until the server has sent
+		// them in this login.
+		statQuery("get_current_stat", func(c *client) *[skillCount]int { return &c.currentStats }),
+		statQuery("get_max_stat", func(c *client) *[skillCount]int { return &c.baseStats }),
+		statQuery("get_experience", func(c *client) *[skillCount]int { return &c.experience }),
+		// Current hits as a whole percentage of the base hits, as plutonium
+		// rounds it down; null until the stats have come, since plutonium
+		// divides by the base hits, which are 0 until then.
+		&fnSpec{
+			name: "get_hp_percent",
+			kind: fnQuery,
+			call: func(c *client, _ fnArgs) (any, error) {
+				if !c.statsSeen || c.baseStats[3] == 0 {
+					return nil, nil
+				}
+				return c.getHPPercent(), nil
+			},
+		},
+		&fnSpec{
+			name: "in_combat",
+			kind: fnQuery,
+			call: func(c *client, _ fnArgs) (any, error) { return c.inCombat(), nil },
+		},
+		// The style the server last reported, null until it has reported one
+		// in this login.
+		&fnSpec{
+			name: "get_combat_style",
+			kind: fnQuery,
+			call: func(c *client, _ fnArgs) (any, error) {
+				if !c.combatStyleSeen {
+					return nil, nil
+				}
+				return c.combatStyle, nil
+			},
+		},
+		&fnSpec{
+			name:   "set_combat_style",
+			kind:   fnAction,
+			params: []param{{name: "id", required: true}},
+			call: func(c *client, args fnArgs) (any, error) {
+				id, err := args.Int("id")
+				if err != nil {
+					return nil, err
+				}
+				if id < 0 || id >= combatStyleCount {
+					return nil, badArg("id", fmt.Sprintf("is not a combat style (0 to %d)", combatStyleCount-1))
+				}
+				c.setCombatStyle(id)
 				return nil, nil
 			},
 		},

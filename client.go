@@ -167,6 +167,11 @@ type client struct {
 	// bankSeen is whether the bank has been opened in this login, so
 	// bankItems holds its contents rather than nothing yet (serve mode).
 	bankSeen bool
+	// statsSeen is whether the server has sent the stats in this login, so
+	// currentStats, baseStats and experience hold them rather than zeros
+	// (serve mode). combatStyleSeen is the same for combatStyle.
+	statsSeen       bool
+	combatStyleSeen bool
 
 	blackhole bool
 }
@@ -2263,6 +2268,7 @@ func (c *client) handlePacket(p *RSCPacket, opcode, length int) {
 			c.experience[i] = int(uint32(p.readInt()) / 4)
 		}
 		c.questPoints = p.readByteAsInt()
+		c.statsSeen = true
 	case 159: // update stat and xp
 		skill := p.readByteAsInt()
 		c.currentStats[skill] = p.readByteAsInt()
@@ -2302,6 +2308,7 @@ func (c *client) handlePacket(p *RSCPacket, opcode, length int) {
 		c.sleeping = false
 	case 129: // combat style changed
 		c.combatStyle = p.readByteAsInt()
+		c.combatStyleSeen = true
 		if c.account.debug {
 			fmt.Printf("[%s] Combat style: %d\n", c.user, c.combatStyle)
 		}

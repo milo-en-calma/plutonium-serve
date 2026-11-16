@@ -55,6 +55,7 @@ The surface grows one slice at a time, as clients need it (#5). Served so far:
 | ground items (#15) | `get_ground_items`, `pickup_item`, `use_item_on_ground_item` |
 | the bank's contents (#15) | `withdraw`, `get_bank_items`, `get_bank_count` |
 | other players (#16) | `get_players` |
+| stats and combat (#17) | `get_current_stat`, `get_max_stat`, `get_experience`, `get_hp_percent`, `in_combat`, `get_combat_style`, `set_combat_style`, `cast_on_npc` |
 
 - `walk_path_to` answers `false` for "no path". On that precedent, `use_sleeping_bag`
   answers `true` when a bag was carried and used, and `false` when none was, in which
@@ -103,6 +104,22 @@ The surface grows one slice at a time, as clients need it (#5). Served so far:
   (`ref`, `username`, `x`, `z`, `hp`, `max_hp`, `combat_level`), with the same coordinates
   as `get_x` and `get_z`. Plutonium's list holds the account's own character too, first;
   it is left out. An empty list when nobody else is in view.
+- `get_current_stat`, `get_max_stat` and `get_experience` take a skill `id`, 0 (attack) to
+  17 (thieving) as in `ids/skills.txt`, and answer its current level, base level or
+  experience. They and `get_hp_percent` answer **`null` until the server has sent the stats
+  in this login**: every level reads 0 before then, and plutonium's `get_hp_percent` would
+  divide by the base hits. `get_hp_percent` is the current hits as a whole percentage of the
+  base hits, rounded down as plutonium does.
+- `in_combat` answers whether the character is fighting right now. Each NPC in `get_npcs`
+  and in the NPC events carries `in_combat` too (plutonium's `npc.in_combat()`), so a client
+  can tell a creature already fighting someone.
+- `get_combat_style` answers the style the server last reported, 0 controlled, 1 aggressive,
+  2 accurate or 3 defensive (`ids/combat.txt`), and `null` until it has reported one in this
+  login. `set_combat_style` takes `id`, 0 to 3, and answers `null`; the server's report of
+  the change shows in `get_combat_style` afterwards.
+- `cast_on_npc` takes `spell_id`, 0 to 47 as in `ids/spells.txt`, and `npc`, plutonium's
+  parameter names, and answers `null`. As in plutonium it doesn't walk there first, unlike
+  `attack_npc`; whether the spell reaches is the server's to say, in its messages.
 - `open_bank()` is deliberately not served: it is a script routine with its own timer,
   not a primitive, so the client composes it from `talk_to_npc` and `answer`.
 - `calculate_path_to` and `calculate_path` are queries. Plutonium returns a path

@@ -151,7 +151,7 @@ func firstName(evs []event) string {
 // goldenScene gives a fake client something for every query to report: a
 // position and fatigue, a tree and a stump, a door, an axe, a log and a sleeping bag,
 // a log on the ground, a bank seen and closed again, a banker in view with the
-// banker's menu showing, and another player nearby.
+// banker's menu showing, another player nearby, and the stats and combat style.
 func goldenScene(c *client) {
 	c.x, c.z = 220, 634
 	// A map with no landscape loaded, all open ground, for the path queries.
@@ -185,6 +185,26 @@ func goldenScene(c *client) {
 	c.players[0] = &player{serverIndex: 3, username: "Pat Sample", x: 220, z: 634}
 	c.players[1] = &player{serverIndex: 8, username: "Ann Example", x: 223, z: 636, currentHP: 10, maxHP: 10, combatLevel: 3}
 	c.playerCount = 2
+	// The stats, with 9 of 12 hits, and the aggressive combat style.
+	feedStats(c, 9, 12, 1200)
+	feed(c, 129, u8(1))
+}
+
+// feedStats runs the stats packet (156) through the client: attack (0) at
+// level 5 with 400 experience, hits (3) at current of base with hitsXP, and
+// every other skill at level 1 with none.
+func feedStats(c *client, current, base, hitsXP int) {
+	currentLevels, baseLevels, experience := make([]byte, skillCount), make([]byte, skillCount), []byte{}
+	for i := range currentLevels {
+		currentLevels[i], baseLevels[i] = 1, 1
+	}
+	currentLevels[0], baseLevels[0] = 5, 5
+	currentLevels[3], baseLevels[3] = byte(current), byte(base)
+	for i := 0; i < skillCount; i++ {
+		xp := map[int]int{0: 400, 3: hitsXP}[i]
+		experience = append(experience, u32(xp*4)...) // the server sends it times four
+	}
+	feed(c, 156, currentLevels, baseLevels, experience, u8(0)) // quest points last
 }
 
 // callScenario is one request whose exact response is pinned. A GET's body is
@@ -210,6 +230,14 @@ var callScenarios = map[string]callScenario{
 	"get_ground_items":    {"GET", ""},
 	"get_bank_items":      {"GET", ""},
 	"get_bank_count":      {"GET", "id=169"},
+	"get_current_stat":    {"GET", "id=3"},
+	"get_max_stat":        {"GET", "id=3"},
+	"get_experience":      {"GET", "id=3"},
+	"get_hp_percent":      {"GET", ""},
+	"in_combat":           {"GET", ""},
+	"get_combat_style":    {"GET", ""},
+	"set_combat_style":    {"POST", `{"id":2}`},
+	"cast_on_npc":         {"POST", `{"spell_id":0,"npc":"npc/12:id=95"}`},
 	// goldenScene's map has no landscape loaded, so it is open ground and
 	// these find straight paths.
 	"calculate_path_to":  {"GET", "x=223&z=634"},

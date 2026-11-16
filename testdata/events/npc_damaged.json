@@ -6,6 +6,7 @@
     "x": 130,
     "z": 512,
     "hp": 15,
-    "max_hp": 20
+    "max_hp": 20,
+    "in_combat": false
   }
 }

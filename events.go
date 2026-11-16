@@ -228,6 +228,8 @@ type npcView struct {
 	Z     int    `json:"z"`
 	HP    int    `json:"hp"`
 	MaxHP int    `json:"max_hp"`
+	// InCombat is whether the NPC is fighting someone right now (#17).
+	InCombat bool `json:"in_combat"`
 }
 
 type playerView struct {
@@ -280,7 +282,7 @@ func wallObjectRef(o *wallObject) string {
 func groundItemRef(g *groundItem) string { return fmt.Sprintf("ground/%d@%d,%d", g.id, g.x, g.z) }
 
 func npcViewOf(n *npc) npcView {
-	return npcView{Ref: npcRef(n), ID: n.id, X: n.x, Z: n.z, HP: n.currentHP, MaxHP: n.maxHP}
+	return npcView{Ref: npcRef(n), ID: n.id, X: n.x, Z: n.z, HP: n.currentHP, MaxHP: n.maxHP, InCombat: n.inCombat()}
 }
 
 func playerViewOf(p *player) playerView {

@@ -97,7 +97,7 @@ func TestPayloadIsCopiedAtPublish(t *testing.T) {
 	n.x = 999 // the game loop keeps mutating the live entity
 
 	got := string(c.events.since(0).events[0].data)
-	want := `{"npc":{"ref":"npc/412:id=65","id":65,"x":130,"z":512,"hp":0,"max_hp":0}}`
+	want := `{"npc":{"ref":"npc/412:id=65","id":65,"x":130,"z":512,"hp":0,"max_hp":0,"in_combat":false}}`
 	if got != want {
 		t.Fatalf("got %s\nwant %s", got, want)
 	}

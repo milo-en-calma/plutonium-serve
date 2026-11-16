@@ -521,6 +521,112 @@ func TestPlayersQueryLeavesOutTheOwnCharacter(t *testing.T) {
 	}
 }
 
+// withAFight gives a fake client its stats, 3 of 10 hits, with its character
+// fighting, the defensive combat style, and two chickens (3) in view, the
+// first fighting and the second not.
+func withAFight(c *client) {
+	feedStats(c, 3, 10, 1154)
+	feed(c, 129, u8(3))
+	c.sprite = 8
+	c.npcs[0] = &npc{id: 3, serverIndex: 20, x: 221, z: 634, currentHP: 2, maxHP: 3, sprite: 9}
+	c.npcs[1] = &npc{id: 3, serverIndex: 21, x: 224, z: 630, currentHP: 3, maxHP: 3}
+	c.npcCount = 2
+}
+
+func TestStatsAndCombatQueries(t *testing.T) {
+	e := newTestEnv(t, "")
+	e.fakeOnline("tester", fakeOpts{setup: withAFight})
+
+	for _, q := range []struct {
+		path string
+		want any
+	}{
+		{"get_current_stat?id=3", float64(3)},
+		{"get_max_stat?id=3", float64(10)},
+		{"get_experience?id=3", float64(1154)},
+		{"get_current_stat?id=0", float64(5)},
+		{"get_experience?id=0", float64(400)},
+		{"get_max_stat?id=17", float64(1)},
+		{"get_hp_percent", float64(30)},
+		{"in_combat", true},
+		{"get_combat_style", float64(3)},
+	} {
+		r := e.do("GET", "/v1/accounts/tester/fn/"+q.path, "")
+		r.want(t, 200, "")
+		if r.body["result"] != q.want {
+			t.Fatalf("%s: got %v, want %v", q.path, r.body["result"], q.want)
+		}
+	}
+
+	npcs := e.do("GET", "/v1/accounts/tester/fn/get_npcs", "").body["result"].([]any)
+	if npcs[0].(map[string]any)["in_combat"] != true || npcs[1].(map[string]any)["in_combat"] != false {
+		t.Fatalf("get_npcs: the first chicken is fighting and the second not: %v", npcs)
+	}
+}
+
+// Before the server's stats packet every level reads 0, which would look like
+// real stats, so the stat queries answer null; likewise the combat style.
+func TestStatsAreNullUntilTheServerSendsThem(t *testing.T) {
+	e := newTestEnv(t, "")
+	e.fakeOnline("tester", fakeOpts{})
+
+	for _, path := range []string{
+		"get_current_stat?id=3", "get_max_stat?id=3", "get_experience?id=3", "get_hp_percent", "get_combat_style",
+	} {
+		r := e.do("GET", "/v1/accounts/tester/fn/"+path, "")
+		r.want(t, 200, "")
+		if v, ok := r.body["result"]; !ok || v != nil {
+			t.Fatalf("%s: want null, got %v", path, r.body)
+		}
+	}
+	if r := e.do("GET", "/v1/accounts/tester/fn/in_combat", ""); r.body["result"] != false {
+		t.Fatalf("in_combat: %v", r.body)
+	}
+}
+
+func TestStatsAndCombatActions(t *testing.T) {
+	e := newTestEnv(t, "")
+	fa := e.fakeOnline("tester", fakeOpts{setup: withAFight})
+
+	e.do("POST", "/v1/accounts/tester/fn/set_combat_style", `{"id":1}`).want(t, 200, "")
+	if op := fa.nextPacket(t); op != 29 {
+		t.Fatalf("set_combat_style sent opcode %d, want 29", op)
+	}
+	e.do("POST", "/v1/accounts/tester/fn/cast_on_npc", `{"spell_id":0,"npc":"npc/21:id=3"}`).want(t, 200, "")
+	if op := fa.nextPacket(t); op != 50 {
+		t.Fatalf("cast_on_npc sent opcode %d, want 50", op)
+	}
+}
+
+func TestStatsAndCombatArgumentsThatAreBadOrGone(t *testing.T) {
+	e := newTestEnv(t, "")
+	fa := e.fakeOnline("tester", fakeOpts{setup: withAFight})
+
+	for _, path := range []string{
+		"get_current_stat?id=18", "get_max_stat?id=-1", "get_experience?id=hits", "get_current_stat",
+	} {
+		e.do("GET", "/v1/accounts/tester/fn/"+path, "").want(t, 400, "bad_argument")
+	}
+	for _, step := range []struct{ fn, body string }{
+		{"set_combat_style", `{"id":4}`},
+		{"set_combat_style", `{"id":-1}`},
+		{"set_combat_style", `{}`},
+		{"cast_on_npc", `{"spell_id":48,"npc":"npc/21:id=3"}`},
+		{"cast_on_npc", `{"spell_id":-1,"npc":"npc/21:id=3"}`},
+		{"cast_on_npc", `{"npc":"npc/21:id=3"}`},
+		{"cast_on_npc", `{"spell_id":0,"npc":"npc/21"}`},
+	} {
+		e.do("POST", "/v1/accounts/tester/fn/"+step.fn, step.body).want(t, 400, "bad_argument")
+	}
+	for _, ref := range []string{
+		"npc/21:id=95", // a chicken is at that index, not a banker
+		"npc/22:id=3",  // nobody at that index
+	} {
+		e.do("POST", "/v1/accounts/tester/fn/cast_on_npc", `{"spell_id":0,"npc":"`+ref+`"}`).want(t, 410, "entity_gone")
+	}
+	fa.noPacket(t, 100*time.Millisecond)
+}
+
 // withBanker gives a fake client a banker (95) at server index 12 in view,
 // and the banker's option menu showing.
 func withBanker(c *client) {
