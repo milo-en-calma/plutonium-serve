@@ -196,15 +196,18 @@ var callScenarios = map[string]callScenario{
 	"is_sleeping":         {"GET", ""},
 	// goldenScene's map has no landscape loaded, so it is open ground and
 	// these find straight paths.
-	"calculate_path_to": {"GET", "x=223&z=634"},
-	"calculate_path":    {"GET", "start_x=220&start_z=634&x=220&z=637"},
-	"send_chat_message": {"POST", `{"message":"hello"}`},
-	"answer":            {"POST", `{"index":0}`},
-	"deposit":           {"POST", `{"id":14,"amount":1}`},
-	"close_bank":        {"POST", `{}`},
-	"equip_item":        {"POST", `{"item":"inv/1:id=14"}`},
-	"use_sleeping_bag":  {"POST", `{}`},
-	"skip_tutorial":     {"POST", `{}`},
+	"calculate_path_to":  {"GET", "x=223&z=634"},
+	"calculate_path":     {"GET", "start_x=220&start_z=634&x=220&z=637"},
+	"send_chat_message":  {"POST", `{"message":"hello"}`},
+	"answer":             {"POST", `{"index":0}`},
+	"deposit":            {"POST", `{"id":14,"amount":1}`},
+	"close_bank":         {"POST", `{}`},
+	"equip_item":         {"POST", `{"item":"inv/1:id=14"}`},
+	"use_item":           {"POST", `{"item":"inv/1:id=14"}`},
+	"drop_item":          {"POST", `{"item":"inv/1:id=14"}`},
+	"use_item_with_item": {"POST", `{"item":"inv/1:id=14","with_item":"inv/0:id=87"}`},
+	"use_sleeping_bag":   {"POST", `{}`},
+	"skip_tutorial":      {"POST", `{}`},
 }
 
 // Functions whose success needs the pathfinder, which needs the landscape
@@ -219,6 +222,7 @@ var pathfindingFunctions = map[string]callScenario{
 	"talk_to_npc":        {"POST", `{"npc":"npc/13:id=95"}`},
 	"attack_npc":         {"POST", `{"npc":"npc/13:id=95"}`},
 	"use_item_on_object": {"POST", `{"item":"inv/1:id=14","object":"object/1@170,640"}`},
+	"use_item_on_npc":    {"POST", `{"item":"inv/1:id=14","npc":"npc/13:id=95"}`},
 }
 
 func TestGoldenCallResponses(t *testing.T) {

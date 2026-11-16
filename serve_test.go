@@ -358,6 +358,45 @@ func TestEquipItemSendsItsPacket(t *testing.T) {
 	}
 }
 
+func TestCarriedItemActionsSendTheirPackets(t *testing.T) {
+	e := newTestEnv(t, "")
+	fa := e.fakeOnline("tester", fakeOpts{setup: withScene}) // an axe (87) in slot 0, logs (14) in 1 and 2
+
+	for _, step := range []struct {
+		fn, body string
+		opcode   byte
+	}{
+		{"use_item", `{"item":"inv/1:id=14"}`, 90},
+		{"drop_item", `{"item":"inv/2:id=14"}`, 246},
+		{"use_item_with_item", `{"item":"inv/0:id=87","with_item":"inv/1:id=14"}`, 91},
+	} {
+		e.do("POST", "/v1/accounts/tester/fn/"+step.fn, step.body).want(t, 200, "")
+		if op := fa.nextPacket(t); op != step.opcode {
+			t.Fatalf("%s sent opcode %d, want %d", step.fn, op, step.opcode)
+		}
+	}
+}
+
+// use_item_on_npc walks to the NPC first, which needs the pathfinder (see
+// talk_to_npc below); its arguments are checked here.
+func TestCarriedItemArgumentsThatAreGoneOrBad(t *testing.T) {
+	e := newTestEnv(t, "")
+	fa := e.fakeOnline("tester", fakeOpts{setup: func(c *client) { withScene(c); withBanker(c) }})
+
+	for _, fn := range []string{"use_item", "drop_item"} {
+		e.do("POST", "/v1/accounts/tester/fn/"+fn, `{"item":"inv/1:id=87"}`).want(t, 410, "entity_gone")
+		e.do("POST", "/v1/accounts/tester/fn/"+fn, `{"item":"inv/1"}`).want(t, 400, "bad_argument")
+		e.do("POST", "/v1/accounts/tester/fn/"+fn, `{}`).want(t, 400, "bad_argument")
+	}
+	e.do("POST", "/v1/accounts/tester/fn/use_item_with_item", `{"item":"inv/1:id=14","with_item":"inv/1:id=14"}`).want(t, 400, "bad_argument")
+	e.do("POST", "/v1/accounts/tester/fn/use_item_with_item", `{"item":"inv/1:id=14","with_item":"inv/3:id=14"}`).want(t, 410, "entity_gone")
+	e.do("POST", "/v1/accounts/tester/fn/use_item_with_item", `{"item":"inv/1:id=14"}`).want(t, 400, "bad_argument")
+	e.do("POST", "/v1/accounts/tester/fn/use_item_on_npc", `{"item":"inv/1:id=14","npc":"npc/12:id=65"}`).want(t, 410, "entity_gone")
+	e.do("POST", "/v1/accounts/tester/fn/use_item_on_npc", `{"item":"inv/3:id=14","npc":"npc/12:id=95"}`).want(t, 410, "entity_gone")
+	e.do("POST", "/v1/accounts/tester/fn/use_item_on_npc", `{"item":"inv/1:id=14","npc":"banker"}`).want(t, 400, "bad_argument")
+	fa.noPacket(t, 100*time.Millisecond)
+}
+
 // use_item_on_object's success path walks to the object first, which needs the
 // pathfinder (see talk_to_npc below); its arguments are checked here.
 func TestInventoryRefsThatAreGoneOrBad(t *testing.T) {

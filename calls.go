@@ -687,6 +687,76 @@ func init() {
 				return nil, nil
 			},
 		},
+		// An item's own first option, as a left click on it does: eat, bury.
+		&fnSpec{
+			name:   "use_item",
+			kind:   fnAction,
+			params: []param{{name: "item", required: true}},
+			call: func(c *client, args fnArgs) (any, error) {
+				it, err := inventoryItemArg(c, args, "item")
+				if err != nil {
+					return nil, err
+				}
+				c.useInventoryItem(it)
+				return nil, nil
+			},
+		},
+		// Dropping an item where the player stands: the whole stack in that
+		// slot, as plutonium sends it.
+		&fnSpec{
+			name:   "drop_item",
+			kind:   fnAction,
+			params: []param{{name: "item", required: true}},
+			call: func(c *client, args fnArgs) (any, error) {
+				it, err := inventoryItemArg(c, args, "item")
+				if err != nil {
+					return nil, err
+				}
+				c.dropInventoryItem(it)
+				return nil, nil
+			},
+		},
+		// Using one carried item on another, e.g. a needle on leather.
+		// plutonium names both parameters item; the second is with_item here,
+		// since a JSON body can't hold the same name twice.
+		&fnSpec{
+			name:   "use_item_with_item",
+			kind:   fnAction,
+			params: []param{{name: "item", required: true}, {name: "with_item", required: true}},
+			call: func(c *client, args fnArgs) (any, error) {
+				it, err := inventoryItemArg(c, args, "item")
+				if err != nil {
+					return nil, err
+				}
+				with, err := inventoryItemArg(c, args, "with_item")
+				if err != nil {
+					return nil, err
+				}
+				if it.slot == with.slot {
+					return nil, badArg("with_item", "is the same slot as item")
+				}
+				c.useInventoryItemOnInventoryItem(it, with)
+				return nil, nil
+			},
+		},
+		// Using an item on an NPC, e.g. shears on a sheep. Walks there first.
+		&fnSpec{
+			name:   "use_item_on_npc",
+			kind:   fnAction,
+			params: []param{{name: "item", required: true}, {name: "npc", required: true}},
+			call: func(c *client, args fnArgs) (any, error) {
+				it, err := inventoryItemArg(c, args, "item")
+				if err != nil {
+					return nil, err
+				}
+				n, err := npcArg(c, args, "npc")
+				if err != nil {
+					return nil, err
+				}
+				c.useInventoryItemOnNPC(it, n)
+				return nil, nil
+			},
+		},
 
 		// NPCs (banking talks to a banker).
 		&fnSpec{

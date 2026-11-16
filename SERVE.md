@@ -51,6 +51,7 @@ The surface grows one slice at a time, as clients need it (#5). Served so far:
 | replying to chat | `walk_to` |
 | leaving Tutorial Island | `skip_tutorial` |
 | gear, fighting, cooking (#14) | `equip_item`, `attack_npc`, `use_item_on_object` |
+| carried items (#15) | `use_item`, `drop_item`, `use_item_with_item`, `use_item_on_npc` |
 
 - `walk_path_to` answers `false` for "no path". On that precedent, `use_sleeping_bag`
   answers `true` when a bag was carried and used, and `false` when none was, in which
@@ -77,6 +78,12 @@ The surface grows one slice at a time, as clients need it (#5). Served so far:
   to their target first, as `talk_to_npc` and `at_object` do; `equip_item` doesn't move.
   All three answer `null`; the game's answer comes as events (`server_message`,
   `npc_damaged`) and in the next queries.
+- `use_item` uses an item's own first option (eat, bury), as a left click does. `drop_item`
+  drops the whole stack in that slot where the player stands, as plutonium sends it.
+  `use_item_with_item` takes `item` and `with_item`: plutonium names both parameters `item`,
+  which a JSON body can't hold twice. The same slot twice is a `bad_argument`.
+  `use_item_on_npc` takes `item` and `npc` and walks to the NPC first, as `attack_npc` does.
+  All four answer `null`.
 - `open_bank()` is deliberately not served: it is a script routine with its own timer,
   not a primitive, so the client composes it from `talk_to_npc` and `answer`.
 - `calculate_path_to` and `calculate_path` are queries. Plutonium returns a path
