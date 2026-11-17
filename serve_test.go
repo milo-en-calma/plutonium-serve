@@ -780,6 +780,46 @@ func TestSkipTutorialSendsItsPacket(t *testing.T) {
 	}
 }
 
+func TestAppearanceScreenAndUpdate(t *testing.T) {
+	e := newTestEnv(t, "")
+	fa := e.fakeOnline("tester", fakeOpts{setup: func(c *client) { c.appearanceChange = true }})
+
+	if r := e.do("GET", "/v1/accounts/tester/fn/is_appearance_screen", ""); r.body["result"] != true {
+		t.Fatalf("is_appearance_screen while shown: %v", r.body)
+	}
+	look := `{"head_gender":1,"head_type":5,"body_type":1,"hair_colour":9,"top_colour":14,"pants_colour":0,"skin_colour":4}`
+	e.do("POST", "/v1/accounts/tester/fn/send_appearance_update", look).want(t, 200, "")
+	if op := fa.nextPacket(t); op != 235 {
+		t.Fatalf("send_appearance_update sent opcode %d, want 235", op)
+	}
+	if r := e.do("GET", "/v1/accounts/tester/fn/is_appearance_screen", ""); r.body["result"] != false {
+		t.Fatalf("is_appearance_screen after sending a look: %v", r.body)
+	}
+}
+
+func TestAppearanceUpdateArgumentsThatAreBad(t *testing.T) {
+	e := newTestEnv(t, "")
+	fa := e.fakeOnline("tester", fakeOpts{setup: func(c *client) { c.appearanceChange = true }})
+
+	for _, body := range []string{
+		`{"head_gender":3,"head_type":0,"body_type":1,"hair_colour":0,"top_colour":0,"pants_colour":0,"skin_colour":0}`,
+		`{"head_gender":1,"head_type":8,"body_type":1,"hair_colour":0,"top_colour":0,"pants_colour":0,"skin_colour":0}`,
+		`{"head_gender":1,"head_type":0,"body_type":-1,"hair_colour":0,"top_colour":0,"pants_colour":0,"skin_colour":0}`,
+		`{"head_gender":1,"head_type":0,"body_type":1,"hair_colour":10,"top_colour":0,"pants_colour":0,"skin_colour":0}`,
+		`{"head_gender":1,"head_type":0,"body_type":1,"hair_colour":0,"top_colour":15,"pants_colour":0,"skin_colour":0}`,
+		`{"head_gender":1,"head_type":0,"body_type":1,"hair_colour":0,"top_colour":0,"pants_colour":15,"skin_colour":0}`,
+		`{"head_gender":1,"head_type":0,"body_type":1,"hair_colour":0,"top_colour":0,"pants_colour":0,"skin_colour":5}`,
+		`{"head_gender":1,"head_type":0,"body_type":1,"hair_colour":0,"top_colour":0,"pants_colour":0}`,
+		`{"head_gender":"male","head_type":0,"body_type":1,"hair_colour":0,"top_colour":0,"pants_colour":0,"skin_colour":0}`,
+	} {
+		e.do("POST", "/v1/accounts/tester/fn/send_appearance_update", body).want(t, 400, "bad_argument")
+	}
+	fa.noPacket(t, 100*time.Millisecond)
+	if r := e.do("GET", "/v1/accounts/tester/fn/is_appearance_screen", ""); r.body["result"] != true {
+		t.Fatalf("is_appearance_screen after refused looks: %v", r.body)
+	}
+}
+
 func TestBankingArgumentsAndGoneNPC(t *testing.T) {
 	e := newTestEnv(t, "")
 	fa := e.fakeOnline("tester", fakeOpts{setup: withBanker})

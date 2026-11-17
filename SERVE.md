@@ -56,6 +56,7 @@ The surface grows one slice at a time, as clients need it (#5). Served so far:
 | the bank's contents (#15) | `withdraw`, `get_bank_items`, `get_bank_count` |
 | other players (#16) | `get_players` |
 | stats and combat (#17) | `get_current_stat`, `get_max_stat`, `get_experience`, `get_hp_percent`, `in_combat`, `get_combat_style`, `set_combat_style`, `cast_on_npc` |
+| character design (#18) | `is_appearance_screen`, `send_appearance_update` |
 
 - `walk_path_to` answers `false` for "no path". On that precedent, `use_sleeping_bag`
   answers `true` when a bag was carried and used, and `false` when none was, in which
@@ -66,6 +67,13 @@ The surface grows one slice at a time, as clients need it (#5). Served so far:
   moving them to its respawn point (Lumbridge by default); elsewhere it is ignored, so
   `get_x`/`get_z` afterwards say whether it worked.
 - `answer` checks the index against the menu's real option count.
+- `is_appearance_screen` is true from the server's "show appearance change" message
+  (a new account's first login) until a look is sent. `send_appearance_update` takes
+  `head_gender`, `head_type`, `body_type`, `hair_colour`, `top_colour`, `pants_colour`
+  and `skin_colour`, all required, each checked against the classic client's design
+  screen (gender 0 to 2, head and body pictures 0 to 7, 10 hair, 15 clothing and 5 skin
+  colours), and answers `null`. A value outside those is a `bad_argument` and sends
+  nothing.
 - `walk_to` sends one walk packet planned within the loaded region, with none of
   `walk_path_to`'s long-distance search. Its use here is stopping: sent to the tile the
   player stands on, the server drops whatever path it was walking

@@ -1206,5 +1206,60 @@ func init() {
 				return nil, nil
 			},
 		},
+
+		// The character design screen a new account is shown at first login,
+		// as plutonium's is_appearance_screen and send_appearance_update.
+		// Sending a look closes the screen.
+		&fnSpec{
+			name: "is_appearance_screen",
+			kind: fnQuery,
+			call: func(c *client, _ fnArgs) (any, error) { return c.appearanceChange, nil },
+		},
+		&fnSpec{
+			name:   "send_appearance_update",
+			kind:   fnAction,
+			params: appearanceParams(),
+			call: func(c *client, args fnArgs) (any, error) {
+				var v [len(appearanceRanges)]int
+				for i, r := range appearanceRanges {
+					n, err := args.Int(r.name)
+					if err != nil {
+						return nil, err
+					}
+					if n < r.lo || n > r.hi {
+						return nil, badArg(r.name, fmt.Sprintf("must be between %d and %d", r.lo, r.hi))
+					}
+					v[i] = n
+				}
+				c.sendAppearanceUpdate(v[0], v[1], v[2], v[3], v[4], v[5], v[6])
+				return nil, nil
+			},
+		},
 	)
+}
+
+// appearanceRanges are send_appearance_update's arguments, in the packet's
+// order, each with the choices the classic client's design screen offers: the
+// head's gender (1 or 2 there; 0 is what plutonium's own skip_tutorial script
+// sends), the head and body pictures, 10 hair colours, 15 clothing colours and
+// 5 skin colours.
+var appearanceRanges = [...]struct {
+	name   string
+	lo, hi int
+}{
+	{"head_gender", 0, 2},
+	{"head_type", 0, 7},
+	{"body_type", 0, 7},
+	{"hair_colour", 0, 9},
+	{"top_colour", 0, 14},
+	{"pants_colour", 0, 14},
+	{"skin_colour", 0, 4},
+}
+
+func appearanceParams() []param {
+	ps := make([]param, len(appearanceRanges))
+	for i, r := range appearanceRanges {
+		ps[i] = param{name: r.name, required: true}
+	}
+	return ps
 }
