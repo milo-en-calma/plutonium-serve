@@ -214,6 +214,14 @@ func (c *client) emitMessage(name, message, from string) {
 	}
 }
 
+// emitChat publishes chat_message, with the speaker's tile when the speaker
+// is known (#20). speaker may be nil: the name alone is sent.
+func (c *client) emitChat(message, from string, speaker *player) {
+	if c.events != nil {
+		c.events.publish("chat_message", map[string]any{"message": message, "from": speakerViewOf(from, speaker)})
+	}
+}
+
 // --- payload views and entity refs ---------------------------------------------
 //
 // Entities carry a deterministic natural-key ref (SERVE.md, entity
@@ -245,6 +253,16 @@ type playerView struct {
 type nameView struct {
 	Ref      string `json:"ref,omitempty"`
 	Username string `json:"username"`
+}
+
+// speakerView is chat_message's from: a nameView plus the tile the speaker
+// stood on when the message arrived, left out when the adapter doesn't know
+// where they are (#20).
+type speakerView struct {
+	Ref      string `json:"ref,omitempty"`
+	Username string `json:"username"`
+	X        *int   `json:"x,omitempty"`
+	Z        *int   `json:"z,omitempty"`
 }
 
 type objectView struct {
@@ -299,6 +317,15 @@ func playerViewOf(p *player) playerView {
 
 func nameViewOf(username string) nameView {
 	return nameView{Ref: playerRef(username), Username: username}
+}
+
+func speakerViewOf(username string, p *player) speakerView {
+	v := speakerView{Ref: playerRef(username), Username: username}
+	if p != nil {
+		x, z := p.x, p.z
+		v.X, v.Z = &x, &z
+	}
+	return v
 }
 
 func objectViewOf(o *object) objectView {

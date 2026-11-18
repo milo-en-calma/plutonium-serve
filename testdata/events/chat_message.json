@@ -1,7 +1,9 @@
 {
   "from": {
     "ref": "player/some_guy",
-    "username": "Some Guy"
+    "username": "Some Guy",
+    "x": 131,
+    "z": 512
   },
   "message": "hello bot"
 }

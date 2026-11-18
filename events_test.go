@@ -363,6 +363,80 @@ func TestEventsStreamAndResume(t *testing.T) {
 	s2.expect("server_message")
 }
 
+// chat_message's from carries the speaker's tile when the adapter knows
+// where they stand, and leaves it out otherwise; private_message never
+// carries one (#20).
+func TestChatMessageSpeakerTile(t *testing.T) {
+	only := func(t *testing.T, c *client) map[string]any {
+		t.Helper()
+		evs := c.events.since(0).events
+		if len(evs) != 1 {
+			t.Fatalf("got %d events, want 1", len(evs))
+		}
+		var d map[string]any
+		if err := json.Unmarshal(evs[0].data, &d); err != nil {
+			t.Fatal(err)
+		}
+		from, _ := d["from"].(map[string]any)
+		return from
+	}
+	wantTile := func(t *testing.T, from map[string]any, x, z float64) {
+		t.Helper()
+		if from["x"] != x || from["z"] != z {
+			t.Fatalf("from = %v, want x=%v z=%v", from, x, z)
+		}
+	}
+	wantNoTile := func(t *testing.T, from map[string]any) {
+		t.Helper()
+		_, hasX := from["x"]
+		_, hasZ := from["z"]
+		if hasX || hasZ || from["username"] == nil {
+			t.Fatalf("from = %v, want a name and no tile", from)
+		}
+	}
+
+	t.Run("player update, every public type", func(t *testing.T) {
+		for _, kind := range []int{1, 7} {
+			c := goldenClient()
+			if kind == 1 {
+				feed(c, 234, u16(1), u16(7), u8(1), u32(0), str("hi"))
+			} else {
+				feed(c, 234, u16(1), u16(7), u8(7), u32(0), u8(0), u8(0), str("hi"))
+			}
+			wantTile(t, only(t, c), 131, 512)
+		}
+	})
+
+	t.Run("server message, speaker in the local list", func(t *testing.T) {
+		c := goldenClient()
+		c.players[0] = c.playersServer[7]
+		c.playerCount = 1
+		feed(c, 131, u32(0), u8(4), u8(1), str("hi"), str("some guy"), str("some guy"))
+		wantTile(t, only(t, c), 131, 512)
+	})
+
+	t.Run("server message, speaker not in the local list", func(t *testing.T) {
+		c := goldenClient()
+		feed(c, 131, u32(0), u8(4), u8(1), str("hi"), str("Far Away"), str("Far Away"))
+		wantNoTile(t, only(t, c))
+	})
+
+	t.Run("a tile at 0,0 is still sent", func(t *testing.T) {
+		c := goldenClient()
+		c.playersServer[7].x, c.playersServer[7].z = 0, 0
+		feed(c, 234, u16(1), u16(7), u8(1), u32(0), str("hi"))
+		wantTile(t, only(t, c), 0, 0)
+	})
+
+	t.Run("private message is unchanged", func(t *testing.T) {
+		c := goldenClient()
+		c.players[0] = c.playersServer[7]
+		c.playerCount = 1
+		feed(c, 131, u32(0), u8(1), u8(1), str("psst"), str("Some Guy"), str("Some Guy"))
+		wantNoTile(t, only(t, c))
+	})
+}
+
 func TestEventsResyncWhenOverwritten(t *testing.T) {
 	setVar(t, &eventBufferSize, 4)
 	e := newTestEnv(t, "")

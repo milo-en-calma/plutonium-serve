@@ -2028,7 +2028,7 @@ func (c *client) handlePacket(p *RSCPacket, opcode, length int) {
 						if c.account.debug {
 							fmt.Printf("[%s] Chat message[%d]: (%s) %s\n", c.user, updateType, player.username, message)
 						}
-						c.emitMessage("chat_message", message, player.username)
+						c.emitChat(message, player.username, player)
 						if c.script != nil && c.script.onChatMessage != nil {
 							c.script.callOnChatMessage(message, player.username)
 						}
@@ -2522,7 +2522,9 @@ func (c *client) handlePacket(p *RSCPacket, opcode, length int) {
 			if c.account.debug {
 				fmt.Printf("[%s] Chat message from [%s]: %s\n", c.user, senderName, msg)
 			}
-			c.emitMessage("chat_message", msg, senderName)
+			// This path carries a name only; the tile comes from the
+			// local player list, when the speaker is in it.
+			c.emitChat(msg, senderName, c.getPlayerByName(senderName))
 			if c.script != nil && c.script.onChatMessage != nil {
 				c.script.callOnChatMessage(msg, senderName)
 			}

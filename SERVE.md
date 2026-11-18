@@ -226,6 +226,12 @@ streamed: `on_load` is the `session` event going `online`, and `on_init`,
 doesn't run. Two events are serve mode's own: `session`, published on every state change
 with the state, reason and session number, and `resync`.
 
+`chat_message`'s `from` carries the speaker's tile (`x`, `z`) at the moment the message
+arrived, when the adapter knows where the speaker stands: always for public chat in the
+player update, and for the server's own chat message only when the speaker is in the
+account's local player list. Otherwise `x` and `z` are left out. `private_message` and
+`trade_request` carry the name only.
+
 **Events are hints; state queries are the truth.** Each account keeps a ring buffer of
 its recent events (4096 by default, `-event-buffer`), numbered per account rather than
 per login, so resuming survives a relogin. Each subscriber is a cursor into the ring,

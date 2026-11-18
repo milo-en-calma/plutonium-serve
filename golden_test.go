@@ -78,8 +78,10 @@ func feed(c *client, opcode byte, payload ...[]byte) {
 // the tests don't load, so they go through the same emit helpers the
 // packet handlers call.
 var eventScenarios = map[string]func(c *client){
+	// Public chat as the player update carries it (type 1), so the
+	// speaker's tile is known (#20).
 	"chat_message": func(c *client) {
-		feed(c, 131, u32(0), u8(4), u8(1), str("hello bot"), str("Some Guy"), str("Some Guy"))
+		feed(c, 234, u16(1), u16(7), u8(1), u32(0), str("hello bot"))
 	},
 	"private_message": func(c *client) {
 		feed(c, 131, u32(0), u8(1), u8(1), str("psst"), str("Some Guy"), str("Some Guy"))
