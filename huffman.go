@@ -1,5 +1,7 @@
 package main
 
+import "unicode/utf8"
+
 // This code was taken from the OpenRSC server, which was refactored from the RSC client.
 
 var (
@@ -86,25 +88,35 @@ func init() {
 	}
 }
 
-func (p *client) convertMessageToBytes(s string) {
-	for i, c := range s {
+// convertMessageToBytes writes one byte per letter of s into chatBuffer, from
+// the start, and returns how many it wrote (#21). Letters are counted, not
+// UTF-8 bytes: a letter such as '\u00c5' takes two bytes in s but one slot here.
+func (p *client) convertMessageToBytes(s string) int {
+	n := 0
+	for _, c := range s {
 		if ((0 >= c) || ('\u0080' <= c)) && (('\u00a0' > c) || ('\u00ff' < c)) {
 			if c0, ok := specialCharacterMap[c]; !ok {
-				p.chatBuffer[i] = '?'
+				p.chatBuffer[n] = '?'
 			} else {
-				p.chatBuffer[i] = byte(c0)
+				p.chatBuffer[n] = byte(c0)
 			}
 		} else {
-			p.chatBuffer[i] = byte(c)
+			p.chatBuffer[n] = byte(c)
 		}
+		n++
 	}
+	return n
 }
 
+// chatLength is the length sent before an encoded message: its letters, not
+// its UTF-8 bytes (#21).
+func chatLength(message string) int { return utf8.RuneCountInString(message) }
+
 func (c *client) encodeHuffman(message string) {
-	c.convertMessageToBytes(message)
+	letters := c.convertMessageToBytes(message)
 	encodedByte := 0
 	outputBitOffset := 0
-	for messageIndex := 0; len(message) > messageIndex; messageIndex++ {
+	for messageIndex := 0; letters > messageIndex; messageIndex++ {
 		messageCharacter := c.chatBuffer[messageIndex]
 		blockValue := block[messageCharacter]
 		initValue := init0[messageCharacter]
@@ -141,7 +153,7 @@ func (c *client) encodeHuffman(message string) {
 			}
 		}
 	}
-	c.decodedChatLength = len(message)
+	c.decodedChatLength = letters
 	c.encodedChatLength = int(uint32(outputBitOffset+7) >> 3)
 }
 

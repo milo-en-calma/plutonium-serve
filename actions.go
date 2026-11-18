@@ -438,7 +438,7 @@ func (c *client) sendChatMessage(text string) {
 		fmt.Printf("[%s] SENDCHATMESSAGE (%s)\n", c.user, text)
 	}
 	c.createPacket(216)
-	c.writeSmart08_16(len(text))
+	c.writeSmart08_16(chatLength(text))
 	c.writeHuffman(text)
 	c.sendPacket()
 }
@@ -450,7 +450,7 @@ func (c *client) sendPrivateMessage(playerName, text string) {
 	c.createPacket(218)
 	c.writeBytes([]byte(playerName))
 	c.writeByte(10)
-	c.writeSmart08_16(len(text))
+	c.writeSmart08_16(chatLength(text))
 	c.writeHuffman(text)
 	c.sendPacket()
 }
