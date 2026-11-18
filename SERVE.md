@@ -18,6 +18,11 @@ go build -o plutonium .
 It must bind to a loopback address. Setting `PLUTONIUM_API_TOKEN` makes every request
 require `Authorization: Bearer <token>`.
 
+A keep-alive connection that goes 2 minutes without a request is closed
+(`idleTimeout`), so connections a client has stopped tracking don't pile up. The limit
+applies only between requests: a request in progress, an event stream included, is never
+cut by it.
+
 `settings.toml` points at the local server (`127.0.0.1:43594`), and `data/RSA.json`
 holds the modulus from the server's `client.pem`. The server only regenerates its
 keypair if that file is deleted (`Crypto.java:96-115`); if it ever is, copy the new

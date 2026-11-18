@@ -5,7 +5,10 @@ package main
 // net.Pipe, so tests can read the exact packets a call sends.
 
 import (
+	"bufio"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -27,7 +30,9 @@ func newTestEnv(t *testing.T, token string) *testEnv {
 	t.Helper()
 	b := &bot{closing: make(chan struct{}), loginWait: make(chan struct{})}
 	s := newServer(b, token)
-	ts := httptest.NewServer(s.handler())
+	ts := httptest.NewUnstartedServer(nil)
+	ts.Config = newHTTPServer("", s.handler())
+	ts.Start()
 	t.Cleanup(ts.Close)
 	return &testEnv{t: t, s: s, ts: ts}
 }
@@ -204,6 +209,99 @@ func waitUntil(t *testing.T, cond func() bool) {
 		}
 	}
 	t.Fatal("condition not met within 5s")
+}
+
+// --- idle connections ---------------------------------------------------------
+
+// rawConn is one TCP connection to the test server, for tests that care
+// which connection a request travels on.
+type rawConn struct {
+	t    *testing.T
+	conn net.Conn
+	br   *bufio.Reader
+}
+
+func (e *testEnv) dial() *rawConn {
+	e.t.Helper()
+	conn, err := net.Dial("tcp", e.ts.Listener.Addr().String())
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	e.t.Cleanup(func() { conn.Close() })
+	return &rawConn{t: e.t, conn: conn, br: bufio.NewReader(conn)}
+}
+
+// get sends a keep-alive GET on this connection and reads the whole response.
+func (rc *rawConn) get(path string) {
+	rc.t.Helper()
+	rc.conn.SetDeadline(time.Now().Add(5 * time.Second))
+	if _, err := fmt.Fprintf(rc.conn, "GET %s HTTP/1.1\r\nHost: test\r\n\r\n", path); err != nil {
+		rc.t.Fatalf("write on the connection: %s", err)
+	}
+	resp, err := http.ReadResponse(rc.br, nil)
+	if err != nil {
+		rc.t.Fatalf("read on the connection: %s", err)
+	}
+	io.Copy(io.Discard, resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != 200 {
+		rc.t.Fatalf("GET %s: %d", path, resp.StatusCode)
+	}
+}
+
+// closedWithin waits for the server to close the connection and returns how
+// long that took.
+func (rc *rawConn) closedWithin(limit time.Duration) time.Duration {
+	rc.t.Helper()
+	start := time.Now()
+	rc.conn.SetReadDeadline(start.Add(limit))
+	_, err := rc.br.ReadByte()
+	if err == nil {
+		rc.t.Fatal("the server sent bytes on an idle connection")
+	}
+	var ne net.Error
+	if errors.As(err, &ne) && ne.Timeout() {
+		rc.t.Fatalf("the connection was still open after %s", limit)
+	}
+	return time.Since(start)
+}
+
+func TestIdleConnectionIsClosedAfterTheLimit(t *testing.T) {
+	setVar(t, &idleTimeout, 300*time.Millisecond)
+	e := newTestEnv(t, "")
+	rc := e.dial()
+
+	rc.get("/v1/accounts")
+	if took := rc.closedWithin(5 * time.Second); took < 250*time.Millisecond {
+		t.Fatalf("closed after %s, before the %s limit", took, idleTimeout)
+	}
+}
+
+func TestBusyConnectionStaysOpen(t *testing.T) {
+	setVar(t, &idleTimeout, 300*time.Millisecond)
+	e := newTestEnv(t, "")
+	rc := e.dial()
+
+	// Ten requests 100 ms apart keep one connection busy for three times
+	// the limit; every one must travel on it.
+	for range 10 {
+		rc.get("/v1/accounts")
+		time.Sleep(100 * time.Millisecond)
+	}
+	rc.get("/v1/accounts")
+}
+
+func TestEventStreamOutlivesTheIdleLimit(t *testing.T) {
+	setVar(t, &idleTimeout, 200*time.Millisecond)
+	e := newTestEnv(t, "")
+	fa := e.fakeOnline("Serve Tst1", fakeOpts{})
+
+	s := e.openStream("/v1/accounts/serve_tst1/events", "")
+	time.Sleep(5 * idleTimeout)
+	fa.c.emitMessage("chat_message", "still here", "Some Guy")
+	if d := s.expect("chat_message").json(t); d["message"] != "still here" {
+		t.Fatalf("chat payload: %v", d)
+	}
 }
 
 // --- calls ------------------------------------------------------------------

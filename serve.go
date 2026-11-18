@@ -40,6 +40,14 @@ const (
 // variable so tests can shorten it.
 var killGrace = 15 * time.Second
 
+// How long a keep-alive connection may wait for its next request before the
+// server closes it. Without a limit, a connection the client has stopped
+// tracking (its pool dropped, say after its machine slept) stays open on this
+// side for good. It applies only between requests, so a request in progress,
+// the long-lived event stream included, is never cut by it. A variable so
+// tests can shorten it.
+var idleTimeout = 2 * time.Minute
+
 type server struct {
 	bot      *bot
 	accounts *registry
@@ -121,11 +129,7 @@ func runServer(b *bot, addr string, sigs <-chan os.Signal) {
 
 	s := newServer(b, os.Getenv(apiTokenEnv))
 
-	httpServer := &http.Server{
-		Addr:              addr,
-		Handler:           s.handler(),
-		ReadHeaderTimeout: 10 * time.Second,
-	}
+	httpServer := newHTTPServer(addr, s.handler())
 
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -143,6 +147,16 @@ func runServer(b *bot, addr string, sigs <-chan os.Signal) {
 	<-sigs
 	fmt.Println("[BOT] Received kill signal, logging accounts out")
 	s.shutdown(httpServer)
+}
+
+// newHTTPServer is the HTTP server's configuration, shared with the tests.
+func newHTTPServer(addr string, h http.Handler) *http.Server {
+	return &http.Server{
+		Addr:              addr,
+		Handler:           h,
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       idleTimeout,
+	}
 }
 
 func newServer(b *bot, token string) *server {
